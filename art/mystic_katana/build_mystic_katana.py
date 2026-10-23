@@ -1229,6 +1229,7 @@ def pbr_material(name, albedo, emission=None, normal=None, orm=None, metallic=0.
     """glTF-friendly Principled material fed by painted / baked textures."""
     mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     mat.use_nodes = True
+    mat.use_backface_culling = True       # closed meshes -> single-sided in glTF
     nt = mat.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -2719,6 +2720,7 @@ def export_glb(objs, path):
     for o, d in zip(objs, dupes):
         clean[d] = o.name
         o.name = o.name + "__src"
+        o.data.name = o.data.name + "__src"
     hilt = [d for d in dupes if clean[d].startswith("Hilt_")]
     others = [d for d in dupes if not clean[d].startswith("Hilt_")]
     for d in others:
@@ -2755,6 +2757,7 @@ def export_glb(objs, path):
             bpy.data.meshes.remove(me)
     for o in objs:
         o.name = o.name[:-5]
+        o.data.name = o.data.name[:-5]
     if scene_root:
         scene_root.name = "MysticKatana"
     return stats

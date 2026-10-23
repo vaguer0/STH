@@ -20,7 +20,7 @@ tarafından üretilir. Script'i yeniden çalıştırmak her şeyi birebir tekrar
 
 Orijin **sapın ortasında** (karakterin elinin tuttuğu yer). glTF eksenlerinde kılıç
 **+Y** yönünü gösteriyor, keskin ağız **+Z**'ye, yassı yüzler **±X**'e bakıyor
-(Blender'da sırasıyla +Z, −Y, ±X). Ölçek metre, toplam boy ~1.03 m.
+(Blender'da sırasıyla +Z, −Y, ±X). Ölçek metre, toplam boy ~1.02 m.
 
 | Nesne | Üçgen | Not |
 | --- | --- | --- |

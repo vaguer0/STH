@@ -25,9 +25,9 @@ Orijin **sapın ortasında** (karakterin elinin tuttuğu yer). glTF eksenlerinde
 | Nesne | Üçgen | Not |
 | --- | --- | --- |
 | `Katana_Blade` | ~8.4k | Rün/hamon/kenar parlaması emission dokusunda |
-| `Katana_Hilt` | ~25.3k | Hilal muhafız, habaki, sargı, menuki, ip-püskül-magatama; tek malzeme |
-| `FX_SpiritFlame` | ~9.4k | El çizimi ateş; 3 malzeme (koyu / orta / çekirdek), çift yüzlü, **gölge düşürmemeli** |
-| `Katana_InkOutline` | ~8.8k | Mürekkep kontur (inverted hull), backface culling açık. İstemezseniz silin |
+| `Katana_Hilt` | ~31k | Alev muhafız, sargı, menuki, ip-püskül-magatama; tek malzeme |
+| `FX_SpiritFlame` | ~10.3k | El çizimi ateş; 3 malzeme (koyu / orta / çekirdek), çift yüzlü, **gölge düşürmemeli** |
+| `Katana_InkOutline` | ~12.2k | Mürekkep kontur (inverted hull), backface culling açık. İstemezseniz silin |
 
 Motor ayarı önerileri:
 
@@ -58,16 +58,20 @@ blender --background --python build_mystic_katana.py -- --no-render
   uca doğru yanık kâğıt gibi dağılır. Habakinin üstünde muhafızdaki hilali tekrar eden
   bir arma var.
 - **Kabza:**
-  - Hilal muhafız kesiti boyunca değişen özel bir profilden süpürüldü. Sırtında
-    eğe çentikleri, iki yüzünde pembe kakma ve yeşim magatama taşları var.
+  - Muhafız, referans alev çiziminden çıkarılan konturlarla yapıldı: dış, orta, iç
+    katman ve parlayan yarık, kalınlığı merkeze doğru artan yuvarlatılmış plakalar.
+    Her katmanın altında biraz daha geniş koyu bir plaka var; çizimdeki kalın siyah
+    konturlar bu yüzden gerçek geometri. Lake gibi çapraz parlama bantları dokuda.
   - Sargı (ito) gerçek bir örgü: şeritler kesişimlerde alt-üst geçer ve
     hineri-maki gibi kabarır. Altında köpekbalığı derisi (samegawa) görünür.
   - Menuki'ler "bulutlu hilal" motifi.
   - Fuchi ve kashira'da gümüş dalga kakması var.
-  - Arka boynuza bağlı üç kat bükümlü ip, püskül ve magatama.
-- **Efektler:** hiçbiri silindir/küre/koni değil. Alevler, 2D efekt animatörlerinin
-  çizdiği gibi spline omurgalı, damla genişlik profilli, S kıvrımlı dillerden oluşan
-  üç tonlu düz şekiller. Kopan alev kıvılcımları ve dört kollu "kira" yıldızları da
+  - Muhafızın sağ alt alev diline bağlı üç kat bükümlü ip, püskül ve magatama.
+- **Efektler:** hiçbiri silindir/küre/koni değil. Ateş, kenar boyunca rastgele
+  aralıklarla dizilmiş birkaç büyük, asimetrik alev kümesinden oluşuyor. Her küme bir
+  baskın ve birkaç farklı boyda dilin kaynaştığı, kenarları gürültüyle bükülmüş bir
+  alandan üç derinlikte (gövde / orta / çekirdek) kesilen düz şekiller; arada kopup
+  havada kalan parçalar da var. Kopan alev kıvılcımları ve dört kollu "kira" yıldızları da
   aynı mantıkla çizildi.
 - **El boyaması görünüm:** kabza dokuları yukarıdan gelen ışık, oyuklarda biriken
   ambient occlusion, kenar parlamaları ve fırça gürültüsüyle boyanıp atlasa pişirildi.

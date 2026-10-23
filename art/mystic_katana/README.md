@@ -13,8 +13,22 @@ tarafından üretilir. Script'i yeniden çalıştırmak her şeyi birebir tekrar
 | `export/mystic_katana.glb` | Oyuna atılacak dosya (dokular gömülü) |
 | `mystic_katana.blend` | Düzenlenebilir Blender sahnesi (parçalar ayrı ayrı) |
 | `textures/` | Namlu (512×4096) ve kabza atlası (2048²): albedo, emission, normal, ORM |
-| `renders/` | Önizleme render'ları |
+| `renders/` | Önizleme render'ları, `katana_fire_loop.mp4` ateş döngüsü videosu |
 | `build_mystic_katana.py` | Her şeyi üreten script |
+
+## Blender'da canlı oynatma
+
+`mystic_katana.blend` dosyasını açın ve **Space**'e basın. Dosya EEVEE ile, görünüm
+"Rendered" modunda ve compositor bloom açık şekilde kaydedildi; zaman çizelgesi
+1–72 kare (24 fps, 3 sn) arasında döngü yapar.
+
+- **Ateş:** 6 farklı el çizimi kare (`FX_SpiritFlame_F0`–`F5`), her biri 3 kare ekranda
+  kalır ("üçerli", 2D anime ateşi gibi); 0.75 sn'de bir döner. Kareler arasında
+  diller boy/eğim/kıvrım değiştirir, kenarlar kaynar, kopan parçalar ve kıvılcımlar
+  yükselip söner.
+- **Parlama:** rünler, hamon ve muhafızın iç katmanı 3 sn'lik yavaş bir nabızla
+  parlar (malzemelerin Emission Strength anahtarları).
+- Görünüm kasarsa sağ üstteki viewport shading'i "Material Preview"a alın.
 
 ## glb içeriği
 
@@ -25,17 +39,23 @@ Orijin **sapın ortasında** (karakterin elinin tuttuğu yer). glTF eksenlerinde
 | Nesne | Üçgen | Not |
 | --- | --- | --- |
 | `Katana_Blade` | ~8.4k | Rün/hamon/kenar parlaması emission dokusunda |
-| `Katana_Hilt` | ~31k | Alev muhafız, sargı, menuki, ip-püskül-magatama; tek malzeme |
-| `FX_SpiritFlame` | ~10.3k | El çizimi ateş; 3 malzeme (koyu / orta / çekirdek), çift yüzlü, **gölge düşürmemeli** |
-| `Katana_InkOutline` | ~12.2k | Mürekkep kontur (inverted hull), backface culling açık. İstemezseniz silin |
+| `Katana_Hilt` | ~32k | Alev muhafız, sargı, menuki, ip-püskül-magatama; tek malzeme |
+| `FX_SpiritFlame_F0`–`F5` | ~12k ×6 | El çizimi ateşin 6 karesi (aynı anda yalnızca biri görünür); 3 malzeme, çift yüzlü, **gölge düşürmemeli** |
+| `Katana_InkOutline` | ~12.7k | Mürekkep kontur (inverted hull), backface culling açık. İstemezseniz silin |
+
+**Animasyon:** glb'de tek bir `SpiritFireLoop` klibi var (3 sn, döngüye alın).
+Ateş kareleri ölçek 1 ↔ 0 ile **STEP** interpolasyonla değişir; parlama nabzı
+`KHR_animation_pointer` ile malzeme emission gücünü oynatır (bu eklentiyi desteklemeyen
+motorlar onu yok sayar, ateş yine oynar). Ekranda bir anda ~65k üçgen çizilir; ateşin
+gizli kareleri ölçek 0'dadır.
 
 Motor ayarı önerileri:
 
 - Bloom/glow açık olursa emission (rünler, hamon, ateş, yeşim) en iyi görünür.
   Malzemeler `KHR_materials_emissive_strength` ile 2–3 güç taşıyor.
-- `FX_SpiritFlame` ve `Katana_InkOutline` için gölge düşürmeyi kapatın.
+- `FX_SpiritFlame_*` ve `Katana_InkOutline` için gölge düşürmeyi kapatın.
 - Daha hafif bir sürüm gerekirse önce `Katana_InkOutline`, sonra `FX_SpiritFlame`
-  kaldırılabilir; kılıç yine okunur.
+  kaldırılabilir (ya da ateşin sadece bir karesi bırakılıp animasyon kapatılabilir).
 
 ## Yeniden üretmek
 
@@ -58,8 +78,9 @@ blender --background --python build_mystic_katana.py -- --no-render
   uca doğru yanık kâğıt gibi dağılır. Muhafızın hemen üstünde, menuki'deki hilali
   tekrar eden bir arma var.
 - **Kabza:**
-  - Muhafız, referans alev çiziminden çıkarılan konturlarla yapıldı: dış, orta, iç
-    katman ve parlayan yarık, kalınlığı merkeze doğru artan yuvarlatılmış plakalar.
+  - Muhafız, referans alev çiziminden (üstten görünüm) çıkarılan konturlarla yapıldı ve
+    tsuba gibi namluya dik duruyor; namlu parlayan yarıktan çıkıyor. Dış, orta, iç
+    katman ve yarık, kalınlığı merkeze doğru artan yuvarlatılmış plakalar.
     Her katmanın altında biraz daha geniş koyu bir plaka var; çizimdeki kalın siyah
     konturlar bu yüzden gerçek geometri. Lake gibi çapraz parlama bantları dokuda.
   - Sargı (ito) gerçek bir örgü: şeritler kesişimlerde alt-üst geçer ve

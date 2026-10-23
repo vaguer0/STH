@@ -1029,7 +1029,7 @@ def paint_blade(res=(512, 4096)):
     for side in (1, -1):
         rng = np.random.default_rng(900 + side)
         # crest: a crescent moon with a four-point star, echoing the menuki
-        a_c = 0.098
+        a_c = 0.036
         tau = float(bl.tau_of_arc(a_c))
         d_b, d_e = bl.bounds(tau)
         w = float(d_e - d_b)
@@ -1047,7 +1047,7 @@ def paint_blade(res=(512, 4096)):
             cv.stamp(rune, pts, np.array([0.00008, 0.0006, 0.00008]), side)
 
         # running text
-        a = 0.121
+        a = 0.060
         a_end = 0.585
         word_left = int(rng.integers(2, 5))
         while a < a_end:
@@ -1367,9 +1367,11 @@ def handle_surface(theta, z, lift=0.0):
 
 
 # ---- flame guard -----------------------------------------------------------------
-# Traced from the reference drawing (pixel coords, y down).  Each layer becomes a
-# rounded plaque, stacked thicker toward the centre, and every layer sits on a
-# slightly larger dark plaque so the drawing's heavy ink lines exist as geometry.
+# Traced from the reference drawing (pixel coords, y down), which shows the guard
+# from above: it lies flat like a tsuba and the white slit is where the blade comes
+# through.  Each layer becomes a rounded plaque, stacked thicker toward the centre,
+# and every layer sits on a slightly larger dark plaque so the drawing's heavy ink
+# lines exist as geometry.
 
 GUARD_OUTER = [(708, 212), (680, 262), (674, 330), (702, 390), (762, 432), (830, 470), (848, 505), (822, 560),
                (802, 610), (812, 632), (842, 628), (872, 590), (888, 532), (916, 560), (936, 612), (940, 662),
@@ -1389,18 +1391,24 @@ GUARD_INNER = [(628, 527), (666, 546), (690, 600), (705, 680), (718, 740), (745,
                (556, 595), (576, 560), (600, 536)]
 GUARD_SLIT = [(625, 606), (637, 650), (645, 720), (648, 790), (640, 820), (625, 836), (610, 820), (600, 790),
               (603, 720), (612, 650)]
-GUARD_H = 0.112                # overall height of the guard
-GUARD_Z0 = -0.0195             # bottom of the flame rests on the lower seppa
-GUARD_PX = GUARD_H / (1068 - 212)
+GUARD_L = 0.118                # length of the flame (along the blade's width)
+GUARD_PX = GUARD_L / (1068 - 212)
+GUARD_SLIT_C = (625, 720)      # slit centre in the drawing = blade axis
+GUARD_SLIT_SCALE = (1.7, 1.3)  # open the slit just enough for the blade to pass
+GUARD_ZC = 0.0045 - 0.0088     # mid-plane: the slit's top face sits just above the blade root
 
 
-def guard_yz(pts_px):
+def guard_xy(pts_px):
+    """Drawing -> plan view: drawing x -> blade flat normal (X), drawing up -> blade back (+Y)."""
     P = np.asarray(pts_px, dtype=np.float64)
-    return np.column_stack([(P[:, 0] - 625) * GUARD_PX, (1068 - P[:, 1]) * GUARD_PX + GUARD_Z0])
+    return np.column_stack([(P[:, 0] - GUARD_SLIT_C[0]) * GUARD_PX, (GUARD_SLIT_C[1] - P[:, 1]) * GUARD_PX])
 
 
 def guard_outline(pts_px, spacing=0.0011, grow=0.0):
-    o = catmull_rom(guard_yz(pts_px), 8, closed=True)
+    if pts_px is GUARD_SLIT:
+        c = np.array(GUARD_SLIT_C, dtype=np.float64)
+        pts_px = c + (np.asarray(pts_px, dtype=np.float64) - c) * np.array(GUARD_SLIT_SCALE)
+    o = catmull_rom(guard_xy(pts_px), 8, closed=True)
     n = max(24, int(np.linalg.norm(np.diff(np.vstack([o, o[:1]]), axis=0), axis=1).sum() / spacing))
     o = resample_polyline(np.vstack([o, o[:1]]), n + 1)[:-1]
     if grow:
@@ -1437,8 +1445,8 @@ def build_flame_guard(col):
             sub.face_mat = [mat] * len(sub.faces)
             if mat == GUARD_INK_SLOT:   # flat ink: no need to spend atlas space on it
                 sub.uv_phys = [[(u * 0.06, v * 0.06) for u, v in f] for f in sub.uv_phys]
-            # local (x, y, thickness) -> world (Y, Z, X); Y x Z = X keeps it right-handed
-            place_local(sub, np.zeros(3), Y, Z, X)
+            # local (x, y, thickness) -> world (X, Y, Z): the plate lies flat round the blade
+            place_local(sub, np.array([0.0, 0.0, GUARD_ZC]), X, Y, Z)
             mb.merge(sub)
         prev_t = half
     return mb.to_object("Hilt_FlameGuard", col)
@@ -1446,12 +1454,12 @@ def build_flame_guard(col):
 
 def guard_tie_frame():
     """Frame round the lower-right flame tongue where the cord is knotted."""
-    C = guard_yz([(858, 838)])[0]
-    C = np.array([0.0, C[0], C[1]])
-    T = np.array([0.0, 0.92, 0.39])
+    C = guard_xy([(858, 838)])[0]
+    C = np.array([C[0], C[1], GUARD_ZC])
+    T = np.array([0.92, 0.39, 0.0])
     T /= np.linalg.norm(T)
-    N = np.array([0.0, 0.39, -0.92])
-    return C, T, N, np.array([1.0, 0.0, 0.0]), 0.0034 * GUARD_H / 0.09, GUARD_LAYERS[0][1]
+    N = np.array([0.39, -0.92, 0.0])
+    return C, T, N, np.array([0.0, 0.0, 1.0]), 0.0034 * GUARD_L / 0.09, GUARD_LAYERS[0][1]
 
 
 def plate(col, name, z_top, z_bot, hx, hy, e=2.6, wobble=0.0):
@@ -1946,12 +1954,18 @@ def field_contours(V, x0, y0, cell, t, min_area=2e-6):
     return out
 
 
-def flame_clump(rng, span, seed, scale=1.0):
+def wave(phase, phi, m=1):
+    """Loop-safe oscillation: integer frequency m keeps phase 0 and 1 identical."""
+    return math.sin(2 * math.pi * (m * phase + phi))
+
+
+def flame_clump(rng, span, seed, scale=1.0, phase=0.0):
     """One big, lopsided mass of fire in (along, out) space.
 
     A dominant tongue plus a few unequal minor ones are summed as a soft distance
     field over a low wavy bed, the field is domain-warped so every edge wobbles
     like a drawn line, then sliced at three depths into body / mid / core shapes.
+    `phase` (0..1, looping) redraws the same clump for the next animation frame.
     """
     nz1, nz2 = Noise2(seed), Noise2(seed + 1)
     tongues = []
@@ -1964,11 +1978,18 @@ def flame_clump(rng, span, seed, scale=1.0):
         w = (rng.uniform(0.010, 0.017) if dom else rng.uniform(0.006, 0.012)) * (h / 0.04) ** 0.35
         lean = rng.uniform(0.25, 1.15)
         curl = float(rng.choice([-1, 1]) * rng.uniform(0.35, 1.1))
+        phi, m = rng.random(), int(rng.integers(1, 3))
+        h *= 1 + 0.22 * wave(phase, phi, m)
+        lean += 0.2 * wave(phase, phi + 0.25)
+        curl *= 1 + 0.3 * wave(phase, phi + 0.6, m)
         tongues.append((x, 0.0, h, w, lean, curl))
-    for _ in range(int(rng.integers(0, 3))):     # pieces torn off the top
+    for _ in range(int(rng.integers(1, 3))):     # pieces torn off the top, rising as they burn out
         h = h_dom * rng.uniform(0.15, 0.3)
-        tongues.append((rng.uniform(0.3, 1.1) * span, h_dom * rng.uniform(0.8, 1.15), h,
-                        h * rng.uniform(0.45, 0.7), rng.uniform(0.4, 1.0), float(rng.choice([-1, 1]))))
+        x, y0 = rng.uniform(0.3, 1.1) * span, h_dom * rng.uniform(0.75, 1.0)
+        w, lean, curl = h * rng.uniform(0.45, 0.7), rng.uniform(0.4, 1.0), float(rng.choice([-1, 1]))
+        rise = (phase + rng.random()) % 1.0
+        tongues.append((x + 0.25 * h_dom * rise, y0 + 0.5 * h_dom * rise, h * (1 - 0.65 * rise), w * (1 - 0.5 * rise),
+                        lean, curl))
     cell = 0.0004
     x_lo, x_hi = -0.012, span + h_dom * 1.3 + 0.01
     y_lo, y_hi = -0.0016, h_dom * 1.6 + 0.01
@@ -1976,8 +1997,9 @@ def flame_clump(rng, span, seed, scale=1.0):
     ys = np.arange(y_lo, y_hi, cell)
     X, Y = np.meshgrid(xs, ys)
     amp = 0.0022 + 0.05 * np.clip(Y, 0, None)          # wobble grows toward the tips
-    Xw = X + amp * (nz1.fbm(X / 0.014, Y / 0.014, 3) - 0.5) * 2
-    Yw = Y + 0.6 * amp * (nz2.fbm(X / 0.014 + 9, Y / 0.014, 3) - 0.5) * 2
+    ox, oy = 1.6 * math.cos(2 * math.pi * phase), 1.6 * math.sin(2 * math.pi * phase)  # boils, then loops
+    Xw = X + amp * (nz1.fbm(X / 0.014 + ox, Y / 0.014 + oy, 3) - 0.5) * 2
+    Yw = Y + 0.6 * amp * (nz2.fbm(X / 0.014 + 9 - oy, Y / 0.014 + ox, 3) - 0.5) * 2
     F = np.full(X.shape, -1.0)
     for (x0, y0, h, w, lean, curl) in tongues:
         s, c, _ = flame_spine(h, lean, curl, n=26)
@@ -1986,7 +2008,7 @@ def flame_clump(rng, span, seed, scale=1.0):
             F = np.maximum(F, rr - np.hypot(Xw - (x0 + cx), Yw - (y0 + cy)))
     Ft = F.copy()
     # low bed of flame hugging the edge, uneven along the clump
-    bed_h = rng.uniform(0.003, 0.006) * (0.6 + 0.8 * nz1(Xw / 0.02, 3.3))
+    bed_h = rng.uniform(0.003, 0.006) * (0.6 + 0.8 * nz1(Xw / 0.02 + 0.5 * ox, 3.3 + 0.5 * oy))
     win = smoothstep(-0.004, 0.012, Xw) * (1 - smoothstep(span - 0.006, span + 0.01, Xw))
     F = np.maximum(F, (bed_h * win - Yw) * np.where(win > 0.05, 1.0, 0.0) - (1 - win) * 0.01)
     layers = []
@@ -1998,7 +2020,8 @@ def flame_clump(rng, span, seed, scale=1.0):
     return layers
 
 
-def build_fx(col, mats):
+def build_fx(col, mats, phase=0.0, name="FX_SpiritFlame"):
+    """One drawing of the fire.  Different `phase` values give the frames of the loop."""
     bl = BLADE
     mb = MeshBuilder()
     rng = np.random.default_rng(2024)
@@ -2045,12 +2068,12 @@ def build_fx(col, mats):
     # them, each turned a little differently so the fire still reads in 3D
     total = edge[0][-1]
     crng = np.random.default_rng(4711)
-    a = total * 0.105
+    a = total * 0.06
     k = 0
     while a < total * 0.93:
         span = crng.uniform(0.035, 0.095)
         scale = 0.75 + 0.5 * sstep(0.1, 0.6, a / total)
-        layers = flame_clump(crng, span, seed=800 + k, scale=scale)
+        layers = flame_clump(crng, span, seed=800 + k, scale=scale, phase=phase)
         roll = crng.uniform(-0.42, 0.42)
         for (polys, off, mat) in zip(layers, (0.0, 0.00018, CORE_OFFSET), (0, 1, 2)):
             for poly in polys:
@@ -2064,7 +2087,7 @@ def build_fx(col, mats):
         roll = rng.uniform(-0.45, 0.45)
         Y = O * math.cos(roll) + Xw * math.sin(roll)
         Z = np.cross(T, Y)
-        fh = rng.uniform(0.007, 0.014)
+        fh = rng.uniform(0.007, 0.014) * (1 + 0.25 * wave(phase, j * 0.37))
         o2, c2 = flame_outlines(fh, fh * 0.42, rng.uniform(0.6, 1.0), float(rng.choice([-1, 1])) * 0.8, 0.0, 600 + j)
         P = E - Y * 0.0008
         flat_shape(mb, o2, P, T, Y, Z, 0.0, mat=0)
@@ -2080,9 +2103,10 @@ def build_fx(col, mats):
         roll = rng.uniform(-0.5, 0.5)
         Y = O * math.cos(roll) + Xw * math.sin(roll)
         Z = np.cross(T, Y)
-        fh = rng.uniform(0.004, 0.0075)
+        rise = (phase + j * 0.618) % 1.0
+        fh = rng.uniform(0.004, 0.0075) * (1 - 0.55 * rise)
         o2, c2 = flame_outlines(fh, fh * 0.5, rng.uniform(0.5, 0.9), float(rng.choice([-1, 1])), 0.0, 900 + j)
-        P = E + Y * rng.uniform(0.026, 0.045) + T * rng.uniform(0.006, 0.02)
+        P = E + Y * (rng.uniform(0.026, 0.045) + 0.012 * rise) + T * (rng.uniform(0.006, 0.02) + 0.03 * rise)
         flat_shape(mb, o2, P, T, Y, Z, 0.0, mat=1)
         flat_shape(mb, c2 * 0.8, P + Y * fh * 0.05, T, Y, Z, CORE_OFFSET, mat=2, both_sides=True)
 
@@ -2100,10 +2124,12 @@ def build_fx(col, mats):
         Xs /= np.linalg.norm(Xs)
         Ys = np.cross(Zs, Xs)
         R = rng.uniform(0.0009, 0.0024) * (1.7 if rng.random() < 0.15 else 1.0)
+        P = P + T * 0.035 * ((phase + j * 0.414) % 1.0)                 # drift toward the point
+        R *= 0.5 + 0.5 * abs(wave(phase, j * 0.29, 2))                    # twinkle
         flat_shape(mb, spark_outline(R), P, Xs, Ys, Zs, 0.0, mat=1)
         flat_shape(mb, spark_outline(R * 0.42, 1.3, 4), P, Xs, Ys, Zs, CORE_OFFSET, mat=2, both_sides=True)
 
-    obj = mb.to_object("FX_SpiritFlame", col, smooth=False)
+    obj = mb.to_object(name, col, smooth=False)
     for m in mats:
         obj.data.materials.append(m)
     obj.visible_shadow = False
@@ -2632,7 +2658,7 @@ def copy_uv(obj, src, dst="UVMap"):
 def build_hilt(col):
     parts = {
         "guard": build_flame_guard(col),
-        "seppa_l": plate(col, "Hilt_SeppaLower", -0.0190, Z_FUCHI_TOP, 0.0147, 0.0192),
+        "seppa_l": plate(col, "Hilt_SeppaLower", GUARD_ZC - GUARD_LAYERS[-1][1] + 0.0004, Z_FUCHI_TOP, 0.0147, 0.0192),
         "tsuka": build_tsuka_core(col),
         "ito": build_ito(col),
         "menuki": build_menuki(col),
@@ -2738,8 +2764,15 @@ def export_glb(objs, path):
     for d in final:
         d.select_set(True)
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    scene = bpy.context.scene
+    old_name, scene.name = scene.name, "SpiritFireLoop"     # SCENE mode names the clip after the scene
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True,
-                              export_yup=True, export_tangents=True, export_image_format='AUTO')
+                              export_yup=True, export_tangents=True, export_image_format='AUTO',
+                              export_animations=True, export_animation_mode='SCENE', export_frame_range=True,
+                              export_anim_scene_split_object=False, export_force_sampling=False,
+                              export_sampling_interpolation_fallback='STEP', export_pointer_animation=True,
+                              export_optimize_animation_size=False)
+    scene.name = old_name
     stats = {d.name: sum(len(p.vertices) - 2 for p in d.data.polygons) for d in final}
     for d in final + [root]:
         me = d.data
@@ -2764,12 +2797,149 @@ def render_previews(col):
         ("front", (1.6, 0.0, 0.25 + o), (0, 0.012, 0.25 + o), 50, 1.12, (900, 2000)),
         ("hilt", (0.36, 0.25, 0.0 + o), (0, 0.02, -0.06 + o), 50, None, (1400, 1400)),
         ("tip", (0.22, -0.16, 0.66 + o), (0, 0.0, 0.6 + o), 50, None, (1400, 1400)),
+        ("guard", (0.17, 0.10, 0.16 + o), (0, 0.0, -0.01 + o), 50, None, (1400, 1400)),
         ("back", (-1.5, -0.6, 0.35 + o), (0, 0.0, 0.25 + o), 50, None, (1100, 2000)),
     ]
     for name, loc, tgt, lens, ortho, res in shots:
         cam = add_camera(col, "Cam_" + name, loc, tgt, lens=lens, ortho=ortho)
         render_view(cam, os.path.join(RENDER_DIR, f"katana_{name}.png"), res=res if not FAST else (res[0] // 2, res[1] // 2),
                     samples=spp)
+
+
+FX_FRAMES = 6        # hand-drawn fire drawings in the loop
+FX_HOLD = 3          # frames each drawing stays on screen ("on threes", like 2D fire)
+LOOP_END = 72        # 3 s at 24 fps: 4 fire loops and one slow glow pulse
+
+
+def id_fcurves(id_):
+    """F-curves of an ID's action (slotted actions in 4.4+, plain actions before)."""
+    ad = id_.animation_data
+    if ad is None or ad.action is None:
+        return []
+    try:
+        from bpy_extras.anim_utils import action_get_channelbag_for_slot
+        bag = action_get_channelbag_for_slot(ad.action, ad.action_slot)
+        return list(bag.fcurves) if bag else []
+    except ImportError:
+        return list(ad.action.fcurves)
+
+
+def set_interpolation(id_, kind):
+    for fc in id_fcurves(id_):
+        for kp in fc.keyframe_points:
+            kp.interpolation = kind
+
+
+def animate_fire(frames):
+    """Swap the fire drawings by stepping their scale between 1 and 0."""
+    scene = bpy.context.scene
+    scene.render.fps = 24
+    scene.frame_start, scene.frame_end = 1, LOOP_END
+    for i, o in enumerate(frames):
+        last = None
+        for f in range(1, LOOP_END + 1):
+            on = ((f - 1) // FX_HOLD) % len(frames) == i
+            if on != last:
+                o.scale = (1.0, 1.0, 1.0) if on else (0.0, 0.0, 0.0)
+                o.keyframe_insert("scale", frame=f)
+                last = on
+        set_interpolation(o, 'CONSTANT')
+    scene.frame_set(1)
+
+
+def animate_glow(mats):
+    """Slow breathing of the runes, temper line and guard glow."""
+    for k, mat in enumerate(mats):
+        bsdf = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+        sock = bsdf.inputs["Emission Strength"]
+        base = sock.default_value
+        for f, mul in ((1, 1.0), (19, 1.28), (37, 0.85), (55, 1.2), (LOOP_END, 1.0)):
+            f2 = f if f in (1, LOOP_END) else f + 4 * k
+            sock.default_value = base * mul
+            sock.keyframe_insert("default_value", frame=f2)
+        sock.default_value = base
+
+
+def setup_live_viewport():
+    """Open the .blend ready to press Space: EEVEE, bloom in the viewport, looping range."""
+    scene = bpy.context.scene
+    scene.render.engine = 'BLENDER_EEVEE'
+    scene.view_settings.view_transform = 'Standard'
+    try:
+        ng = bpy.data.node_groups.new("Bloom", 'CompositorNodeTree')
+        rl = ng.nodes.new('CompositorNodeRLayers')
+        gl = ng.nodes.new('CompositorNodeGlare')
+        gl.inputs['Type'].default_value = 'Bloom'
+        if 'Threshold' in gl.inputs:
+            gl.inputs['Threshold'].default_value = 0.8
+        if 'Size' in gl.inputs and gl.inputs['Size'].type == 'VALUE':
+            gl.inputs['Size'].default_value = 0.6
+        out = ng.nodes.new('NodeGroupOutput')
+        ng.interface.new_socket('Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+        ng.links.new(rl.outputs['Image'], gl.inputs['Image'])
+        ng.links.new(gl.outputs[0], out.inputs[0])
+        scene.compositing_node_group = ng
+    except Exception as e:  # older Blender: bloom simply stays off
+        print("[viewport] compositor bloom not set up:", e)
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            for space in area.spaces:
+                if space.type == 'VIEW_3D':
+                    space.shading.type = 'RENDERED'
+                    if hasattr(space.shading, 'use_compositor'):
+                        space.shading.use_compositor = 'ALWAYS'
+    cam = bpy.data.objects.get("Cam_hero")
+    if cam:
+        scene.camera = cam
+
+
+def render_fire_loop_video(col, frames_dir, out_path, repeats=8):
+    """Render each fire drawing once (with bloom) and cut them on threes into an MP4."""
+    scene = bpy.context.scene
+    o = -GRIP_CENTRE
+    cam = add_camera(col, "Cam_loop", (1.62, 0.36, 0.30 + o), (0, 0.012, 0.25 + o), lens=50)
+    os.makedirs(frames_dir, exist_ok=True)
+    stills = []
+    for i in range(FX_FRAMES):
+        scene.frame_set(1 + i * FX_HOLD)
+        path = os.path.join(frames_dir, f"fire_{i:02d}.png")
+        render_view(cam, path, res=(540, 960) if FAST else (720, 1280), samples=16 if FAST else 48)
+        stills.append(path)
+    scene.frame_set(1)
+    vse = bpy.data.scenes.new("FireLoopVideo")
+    vse.render.fps = 24
+    vse.render.resolution_x, vse.render.resolution_y = (540, 960) if FAST else (720, 1280)
+    vse.render.resolution_percentage = 100
+    ed = vse.sequence_editor_create()
+    coll = ed.strips if hasattr(ed, "strips") else ed.sequences
+    f = 1
+    for _ in range(repeats):
+        for path in stills:
+            st = coll.new_image(name=os.path.basename(path), filepath=path, channel=1, frame_start=f)
+            st.frame_final_duration = FX_HOLD
+            f += FX_HOLD
+    vse.frame_start, vse.frame_end = 1, f - 1
+    if hasattr(vse.render.image_settings, "media_type"):   # Blender 5: pick video before the codec
+        vse.render.image_settings.media_type = 'VIDEO'
+    vse.render.image_settings.file_format = 'FFMPEG'
+    vse.render.ffmpeg.format = 'MPEG4'
+    vse.render.ffmpeg.codec = 'H264'
+    vse.render.ffmpeg.constant_rate_factor = 'HIGH'
+    vse.render.filepath = out_path
+    bpy.ops.render.render(animation=True, scene=vse.name)
+    bpy.data.scenes.remove(vse)
+    # contact sheet of the drawings (upper half of the frame, where the fire is)
+    tiles = []
+    for path in stills:
+        img = bpy.data.images.load(path)
+        w, h = img.size
+        px = np.empty(w * h * 4, np.float32)
+        img.pixels.foreach_get(px)
+        tiles.append(px.reshape(h, w, 4)[h // 3:, :, :3])
+        bpy.data.images.remove(img)
+        os.remove(path)
+    os.rmdir(frames_dir)
+    save_rgba(out_path[:-4] + "_frames.png", np.concatenate(tiles, axis=1), name="fire_frames")
 
 
 def main():
@@ -2784,10 +2954,11 @@ def main():
     blade.data.materials.append(blade_material(paths))
 
     parts = build_hilt(col)
-    fx = build_fx(col, [flat_emissive_material("M_FX_Outer", "#d81b6a", 2.0),
-                        flat_emissive_material("M_FX_Mid", "#ff4f9a", 2.4),
-                        flat_emissive_material("M_FX_Core", "#ffe3ef", 2.6)])
-    shift_to_grip([blade, fx] + list(parts.values()))
+    fx_mats = [flat_emissive_material("M_FX_Outer", "#d81b6a", 2.0),
+               flat_emissive_material("M_FX_Mid", "#ff4f9a", 2.4),
+               flat_emissive_material("M_FX_Core", "#ffe3ef", 2.6)]
+    fx_frames = [build_fx(col, fx_mats, phase=i / FX_FRAMES, name=f"FX_SpiritFlame_F{i}") for i in range(FX_FRAMES)]
+    shift_to_grip([blade] + fx_frames + list(parts.values()))
 
     hilt_objs = list(parts.values())
     res = 1024 if FAST else 2048
@@ -2804,20 +2975,30 @@ def main():
 
     root = bpy.data.objects.new("MysticKatana", None)
     col.objects.link(root)
-    for o in [blade, fx, outline] + hilt_objs:
+    fx_group = bpy.data.objects.new("FX_SpiritFlame", None)
+    col.objects.link(fx_group)
+    fx_group.parent = root
+    for o in [blade, outline] + hilt_objs:
         o.parent = root
+    for o in fx_frames:
+        o.parent = fx_group
+    animate_fire(fx_frames)
+    animate_glow([blade.data.materials[0], hilt_mat])
 
     if not NO_RENDER:
         render_previews(col)
+        render_fire_loop_video(col, os.path.join(RENDER_DIR, "_loop_frames"),
+                               os.path.join(RENDER_DIR, "katana_fire_loop.mp4"))
 
     os.makedirs(EXPORT_DIR, exist_ok=True)
+    setup_live_viewport()
     blend_path = os.path.join(HERE, "mystic_katana.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend_path, compress=True, relative_remap=True)
     bpy.ops.file.make_paths_relative()
     bpy.ops.wm.save_mainfile(compress=True)
 
     swap_ink_for_export(ink)
-    stats = export_glb([blade, fx, outline] + hilt_objs, os.path.join(EXPORT_DIR, "mystic_katana.glb"))
+    stats = export_glb([blade, outline] + fx_frames + hilt_objs, os.path.join(EXPORT_DIR, "mystic_katana.glb"))
     print("[export] triangles:", stats, "total:", sum(stats.values()))
 
 

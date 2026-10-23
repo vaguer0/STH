@@ -390,15 +390,19 @@ def extrude_shape(mb, outline, depth, bevel=0.35, bevel_rings=3, island=None):
         pts = np.column_stack([outline + nrm * off[:, None], z])
         ring_base.append(mb.add_verts(pts))
     zs = [float(np.mean(z)) for _, z in prof]
+    # long rims are cut into ~10 cm UV strips so they pack into the atlas
+    chunk = np.minimum((perim[:-1] / 0.1).astype(int), int(perim[-1] / 0.1))
+    chunk_isl = {c: (island_side if c == 0 else mb.new_island()) for c in np.unique(chunk)}
     for r in range(len(prof) - 1):
         a0, a1 = ring_base[r], ring_base[r + 1]
         for j in range(n):
             j1 = (j + 1) % n
-            u0, u1 = perim[j], perim[j + 1]
+            c = int(chunk[j])
+            u0, u1 = perim[j] - c * 0.1, perim[j + 1] - c * 0.1
             uvp = [(u0, zs[r] + depth), (u1, zs[r] + depth), (u1, zs[r + 1] + depth), (u0, zs[r + 1] + depth)]
             uvq = [(u0 / perim[-1], r / (len(prof) - 1)), (u1 / perim[-1], r / (len(prof) - 1)),
                    (u1 / perim[-1], (r + 1) / (len(prof) - 1)), (u0 / perim[-1], (r + 1) / (len(prof) - 1))]
-            mb.add_face([a0 + j, a0 + j1, a1 + j1, a1 + j], uvp, uvq, island_side)
+            mb.add_face([a0 + j, a0 + j1, a1 + j1, a1 + j], uvp, uvq, chunk_isl[c])
     # caps: triangulate inset outline with ear clipping via bmesh
     inner = outline + nrm * (-np.broadcast_to(inset, (n,)))[:, None]
     tris = triangulate_polygon(inner)
@@ -1024,8 +1028,8 @@ def paint_blade(res=(512, 4096)):
 
     for side in (1, -1):
         rng = np.random.default_rng(900 + side)
-        # crest: a crescent moon with a four-point star, echoing the guard
-        a_c = 0.058
+        # crest: a crescent moon with a four-point star, echoing the menuki
+        a_c = 0.098
         tau = float(bl.tau_of_arc(a_c))
         d_b, d_e = bl.bounds(tau)
         w = float(d_e - d_b)
@@ -1043,7 +1047,7 @@ def paint_blade(res=(512, 4096)):
             cv.stamp(rune, pts, np.array([0.00008, 0.0006, 0.00008]), side)
 
         # running text
-        a = 0.084
+        a = 0.121
         a_end = 0.585
         word_left = int(rng.integers(2, 5))
         while a < a_end:
@@ -1296,11 +1300,9 @@ def blade_material(paths):
 
 
 # ---------------------------------------------------------------------------
-# hilt: crescent guard, habaki, seppa, handle, wrap, menuki, fuchi, kashira
+# hilt: flame guard, seppa, handle, wrap, menuki, fuchi, kashira
 # ---------------------------------------------------------------------------
 
-Z_SEPPA_TOP = -0.0022          # upper seppa sits under the habaki
-Z_CRESCENT_C = -0.0107         # centre line of the crescent at its lowest point
 Z_FUCHI_TOP = -0.0212
 Z_WRAP_TOP = -0.0332
 Z_WRAP_BOT = -0.2470
@@ -1364,118 +1366,92 @@ def handle_surface(theta, z, lift=0.0):
     return P, Nn
 
 
-# ---- crescent guard ---------------------------------------------------------
+# ---- flame guard -----------------------------------------------------------------
+# Traced from the reference drawing (pixel coords, y down).  Each layer becomes a
+# rounded plaque, stacked thicker toward the centre, and every layer sits on a
+# slightly larger dark plaque so the drawing's heavy ink lines exist as geometry.
 
-CRESCENT_CTRL = [(-0.0355, 0.0605), (-0.0490, 0.0495), (-0.0578, 0.0310), (-0.0570, 0.0120),
-                 (-0.0445, -0.0025), (-0.0230, -0.0092), (0.0, Z_CRESCENT_C)]
-
-SHARP_PROF = [(-1.0, 0.0), (-0.72, 0.30), (-0.32, 0.70), (0.12, 0.96), (0.42, 1.0), (0.72, 0.88), (0.94, 0.52), (1.03, 0.0)]
-BLUNT_PROF = [(-1.0, 0.0), (-0.98, 0.58), (-0.86, 0.90), (-0.40, 1.0), (0.15, 1.0), (0.66, 0.95), (0.93, 0.6), (1.03, 0.0)]
-
-
-def crescent_path(n=160):
-    half = CRESCENT_CTRL
-    full = half + [(-y, z) for (y, z) in reversed(half[:-1])]
-    pts2 = catmull_rom(full, 24)
-    pts2 = resample_polyline(pts2, n)
-    return np.column_stack([np.zeros(n), pts2[:, 0], pts2[:, 1]])
-
-
-def crescent_profile(s):
-    """Section at path parameter s (0 = left tip, 0.5 = centre, 1 = right tip)."""
-    m = 1.0 - abs(2 * s - 1)                      # 0 at tips, 1 at centre
-    a = 0.0086 * m ** 0.55 + 0.0004
-    b = 0.0057 * (0.22 + 0.78 * m ** 0.5)
-    for c in (0.285, 0.315, 0.345, 0.655, 0.685, 0.715):  # filed notches on the outer spine
-        a *= 1.0 - 0.16 * math.exp(-((s - c) / 0.0055) ** 2)
-    blunt = sstep(0.62, 0.86, m)
-    half = [(lerp(p[0], q[0], blunt), lerp(p[1], q[1], blunt)) for p, q in zip(SHARP_PROF, BLUNT_PROF)]
-    ring = [(n * a, bb * b) for n, bb in half]
-    ring += [(half[i][0] * a, -half[i][1] * b) for i in range(len(half) - 2, 0, -1)]
-    ring = np.array(ring)[::-1]                   # CCW in (N, B)
-    return ring
+GUARD_OUTER = [(708, 212), (680, 262), (674, 330), (702, 390), (762, 432), (830, 470), (848, 505), (822, 560),
+               (802, 610), (812, 632), (842, 628), (872, 590), (888, 532), (916, 560), (936, 612), (940, 662),
+               (928, 722), (898, 770), (858, 802), (820, 830), (814, 850), (842, 853), (884, 820), (881, 882),
+               (860, 940), (822, 974), (790, 982), (758, 992), (718, 1022), (678, 1050), (620, 1068), (560, 1062),
+               (510, 1040), (480, 1010), (450, 960), (402, 895), (370, 858), (346, 802), (340, 766), (370, 795),
+               (405, 808), (425, 795), (420, 770), (390, 740), (356, 700), (338, 640), (346, 580), (372, 518),
+               (390, 452), (382, 410), (368, 380), (410, 384), (450, 402), (456, 432), (460, 470), (480, 481),
+               (503, 465), (507, 422), (495, 390), (490, 345), (505, 300), (540, 266), (600, 236), (660, 220)]
+GUARD_MID = [(620, 395), (652, 432), (692, 476), (745, 505), (768, 542), (760, 600), (756, 642), (776, 682),
+             (810, 684), (840, 670), (853, 692), (845, 732), (800, 782), (762, 826), (745, 890), (720, 960),
+             (680, 1000), (620, 1012), (560, 1005), (515, 970), (495, 900), (490, 810), (480, 730), (445, 662),
+             (430, 600), (436, 556), (460, 536), (495, 546), (535, 540), (556, 508), (572, 450)]
+GUARD_INNER = [(628, 527), (666, 546), (690, 600), (705, 680), (718, 740), (745, 746), (760, 740), (752, 772),
+               (720, 802), (700, 842), (690, 890), (670, 922), (625, 935), (580, 920), (550, 880), (540, 820),
+               (535, 760), (520, 720), (496, 680), (486, 630), (494, 614), (510, 640), (528, 650), (546, 630),
+               (556, 595), (576, 560), (600, 536)]
+GUARD_SLIT = [(625, 606), (637, 650), (645, 720), (648, 790), (640, 820), (625, 836), (610, 820), (600, 790),
+              (603, 720), (612, 650)]
+GUARD_H = 0.112                # overall height of the guard
+GUARD_Z0 = -0.0195             # bottom of the flame rests on the lower seppa
+GUARD_PX = GUARD_H / (1068 - 212)
 
 
-def build_crescent(col):
+def guard_yz(pts_px):
+    P = np.asarray(pts_px, dtype=np.float64)
+    return np.column_stack([(P[:, 0] - 625) * GUARD_PX, (1068 - P[:, 1]) * GUARD_PX + GUARD_Z0])
+
+
+def guard_outline(pts_px, spacing=0.0011, grow=0.0):
+    o = catmull_rom(guard_yz(pts_px), 8, closed=True)
+    n = max(24, int(np.linalg.norm(np.diff(np.vstack([o, o[:1]]), axis=0), axis=1).sum() / spacing))
+    o = resample_polyline(np.vstack([o, o[:1]]), n + 1)[:-1]
+    if grow:
+        area = np.sum(o[:, 0] * np.roll(o[:, 1], -1) - np.roll(o[:, 0], -1) * o[:, 1])
+        t = np.roll(o, -1, axis=0) - np.roll(o, 1, axis=0)
+        nrm = np.column_stack([t[:, 1], -t[:, 0]]) * (1 if area > 0 else -1)
+        nrm /= np.linalg.norm(nrm, axis=1, keepdims=True)
+        o = o + nrm * grow
+        for _ in range(2):
+            o = 0.5 * o + 0.25 * (np.roll(o, 1, axis=0) + np.roll(o, -1, axis=0))
+    return o
+
+
+# (outline, half thickness, material slot); ink plaques sit just under each colour layer
+GUARD_LAYERS = (
+    (GUARD_OUTER, 0.0047, 0), (GUARD_MID, 0.0062, 1), (GUARD_INNER, 0.0077, 2), (GUARD_SLIT, 0.0088, 3),
+)
+GUARD_INK_SLOT = 4
+
+
+def build_flame_guard(col):
     mb = MeshBuilder()
-    pts = crescent_path()
-    n = len(pts)
-    T = polyline_tangents(pts)
-    X = np.tile([1.0, 0.0, 0.0], (n, 1))
-    N = np.cross(T, X)                            # in-plane normal pointing away from the blade
-    centre = np.array([0.0, 0.0, 0.02])
-    flip = np.sign(np.einsum("ij,ij->i", N, pts - centre))
-    N = N * flip[:, None]
-    B = np.cross(T, N)
-    s = np.linspace(0, 1, n)
-    profiles = [crescent_profile(si) for si in s]
-    ring_idx = sweep(mb, pts, (N, B), profiles, cap_start=0.0025, cap_end=0.0025)
-    band = [0.0] * len(mb.verts)
-    for r, base in enumerate(ring_idx):
-        a = max(float(np.max(np.abs(profiles[r][:, 0]))), 1e-9)
-        for j, (nn, bb) in enumerate(profiles[r]):
-            band[base + j] = nn / a
-    mb.vert_attrs["band_n"] = band
-    return mb.to_object("Hilt_Crescent", col)
+    X = np.array([1.0, 0.0, 0.0])
+    Y = np.array([0.0, 1.0, 0.0])
+    Z = np.array([0.0, 0.0, 1.0])
+    prev_t = 0.0
+    for pts, half, slot in GUARD_LAYERS:
+        ink_half = prev_t + 0.6 * (half - prev_t) if prev_t else half - 0.0004
+        for outline, h, mat, bevel, rings in ((guard_outline(pts, grow=0.0009), ink_half, GUARD_INK_SLOT, 0.0, 0),
+                                              (guard_outline(pts), half, slot, 0.3, 2)):
+            sub = MeshBuilder()
+            sub.cur_mat = mat
+            extrude_shape(sub, outline, 2 * h, bevel=bevel, bevel_rings=rings)
+            sub.face_mat = [mat] * len(sub.faces)
+            if mat == GUARD_INK_SLOT:   # flat ink: no need to spend atlas space on it
+                sub.uv_phys = [[(u * 0.06, v * 0.06) for u, v in f] for f in sub.uv_phys]
+            # local (x, y, thickness) -> world (Y, Z, X); Y x Z = X keeps it right-handed
+            place_local(sub, np.zeros(3), Y, Z, X)
+            mb.merge(sub)
+        prev_t = half
+    return mb.to_object("Hilt_FlameGuard", col)
 
 
-# ---- habaki & seppa -----------------------------------------------------------
-
-def blade_outline_xy(tau=0.0, grow=0.0, edge_grow=None):
-    """Convex outline of the blade section (x, y) grown outward, for collars."""
-    bl = BLADE
-    prof = bl.profile(tau)
-    keep = [0, 1, 2, 8] + list(range(9, len(prof)))
-    pts = []
-    for i in keep:
-        f, x = prof[i]
-        P = bl.pos(tau, f, x)
-        pts.append((P[0], P[1]))
-    for i in reversed(keep[1:-1]):
-        f, x = prof[i]
-        P = bl.pos(tau, f, -x)
-        pts.append((P[0], P[1]))
-    pts = np.array(pts)
-    pts = resample_polyline(np.vstack([pts, pts[:1]]), 41)[:-1]
-    c = np.array([0.0, float(np.mean(pts[:, 1]))])
-    d = pts - c
-    r = np.linalg.norm(d, axis=1, keepdims=True)
-    eg = grow if edge_grow is None else edge_grow
-    g = grow + (eg - grow) * smoothstep(0.0, -0.016, pts[:, 1:2] - c[1])
-    smooth = c + d * (r + g) / r
-    # relax the outline so the collar reads as a cast / filed piece
-    for _ in range(3):
-        smooth = 0.5 * smooth + 0.25 * (np.roll(smooth, 1, 0) + np.roll(smooth, -1, 0))
-    return smooth
-
-
-def build_habaki(col):
-    mb = MeshBuilder()
-    H = 0.0300
-    rings = [
-        (0.0, 0.0024, 0.0016, 0.0),
-        (0.0060, 0.0023, 0.0015, 0.0),
-        (H * 0.62, 0.0021, 0.0013, 0.0),
-        (H - 0.0016, 0.0019, 0.0011, 0.0),
-        (H - 0.0004, 0.0013, 0.0006, 0.0),
-        (H, 0.0004, 0.0001, 0.0),
-    ]
-
-    def outline(g, ge, _):
-        return blade_outline_xy(0.0, g, ge)[::-1]
-
-    # loft_z expects top -> bottom
-    rings = rings[::-1]
-    ring_idx = loft_z(mb, rings, outline, cap_top='flat', cap_bottom='flat')
-    # slant the top toward the edge side (classic habaki silhouette)
-    for ri, r in enumerate(rings):
-        if r[0] > 0.01:
-            for j in range(40):
-                vi = ring_idx[ri] + j
-                x, y, z = mb.verts[vi]
-                drop = 0.0045 * sstep(0.004, -0.017, y)
-                mb.verts[vi] = (x, y, z - drop * (z / H))
-    return mb.to_object("Hilt_Habaki", col)
+def guard_tie_frame():
+    """Frame round the lower-right flame tongue where the cord is knotted."""
+    C = guard_yz([(858, 838)])[0]
+    C = np.array([0.0, C[0], C[1]])
+    T = np.array([0.0, 0.92, 0.39])
+    T /= np.linalg.norm(T)
+    N = np.array([0.0, 0.39, -0.92])
+    return C, T, N, np.array([1.0, 0.0, 0.0]), 0.0034 * GUARD_H / 0.09, GUARD_LAYERS[0][1]
 
 
 def plate(col, name, z_top, z_bot, hx, hy, e=2.6, wobble=0.0):
@@ -1687,26 +1663,11 @@ def rope_profiles(path, radius, twist_len=0.0052, n=9, taper=None):
     return profs
 
 
-def crescent_frame_at(y_target, z_target):
-    pts = crescent_path()
-    i = int(np.argmin(np.hypot(pts[:, 1] - y_target, pts[:, 2] - z_target)))
-    T = polyline_tangents(pts)[i]
-    X = np.array([1.0, 0.0, 0.0])
-    N = np.cross(T, X)
-    if np.dot(N, pts[i] - np.array([0, 0, 0.02])) < 0:
-        N = -N
-    s = i / (len(pts) - 1)
-    prof = crescent_profile(s)
-    a = float(np.max(np.abs(prof[:, 0])))
-    b = float(np.max(np.abs(prof[:, 1])))
-    return pts[i], T, N, X, a, b
-
-
 def build_sageo(col):
-    """Cord knotted round the back horn; one end carries a magatama, one a tassel."""
-    C, T, N, X, a, b = crescent_frame_at(0.0572, 0.0140)
+    """Cord knotted round a guard tongue; one end carries a magatama, one a tassel."""
+    C, T, N, X, a, b = guard_tie_frame()
     rc = 0.00105
-    # wraps round the horn, advancing along it
+    # wraps round the tongue, advancing along it
     ph = np.linspace(-0.6, 2 * math.pi * 2.35, 150)
     loops = (C[None, :] + T[None, :] * (0.0034 * ph / (2 * math.pi) - 0.004)[:, None]
              + N[None, :] * ((a + rc * 1.05) * np.cos(ph))[:, None]
@@ -1775,20 +1736,6 @@ def build_sageo(col):
     place_local(mm, hang + down * 0.0082, xax, np.array([0.0, 0.0, 1.0]), zax)
     mag_obj = mm.to_object("Hilt_Magatama", col)
     return [cord_obj, tassel_obj, mag_obj]
-
-
-def build_gems(col):
-    """Small magatama inlays on both faces of the crescent's centre boss."""
-    mb_all = MeshBuilder()
-    prof = crescent_profile(0.5)
-    b = float(np.max(np.abs(prof[:, 1])))
-    depth = 0.0026
-    for side in (1.0, -1.0):
-        mb = magatama_mesh(0.0094, depth, bevel=0.55, detail=3, rings=2)
-        origin = np.array([side * (b + 0.5 * depth - 0.0009), 0.0, Z_CRESCENT_C - 0.0004])
-        place_local(mb, origin, np.array([0.0, side, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([side, 0.0, 0.0]))
-        mb_all.merge(mb)
-    return mb_all.to_object("Hilt_Gems", col)
 
 
 def build_mekugi(col):
@@ -1918,83 +1865,137 @@ def blade_edge_frames(taus, f=1.0):
     return E, dE, O
 
 
-def segments_intersect(poly):
-    """True if a closed 2D polyline crosses itself (O(n^2), polys are small)."""
-    P = np.asarray(poly)
-    A, B = P, np.roll(P, -1, axis=0)
-    n = len(P)
-    for i in range(n):
-        a, b = A[i], B[i]
-        d = b - a
-        j = np.arange(i + 2, n if i > 0 else n - 1)
-        if len(j) == 0:
-            continue
-        c, e = A[j], B[j]
-        f = e - c
-        den = d[0] * f[:, 1] - d[1] * f[:, 0]
-        ok = np.abs(den) > 1e-18
-        t = ((c[:, 0] - a[0]) * f[:, 1] - (c[:, 1] - a[1]) * f[:, 0]) / np.where(ok, den, 1)
-        u = ((c[:, 0] - a[0]) * d[1] - (c[:, 1] - a[1]) * d[0]) / np.where(ok, den, 1)
-        if np.any(ok & (t > 1e-9) & (t < 1 - 1e-9) & (u > 1e-9) & (u < 1 - 1e-9)):
-            return True
-    return False
+def field_contours(V, x0, y0, cell, t, min_area=2e-6):
+    """Marching squares: closed outer loops of {V > t} on a regular grid, in metres.
 
-
-def fire_contour(tongues, base_y, scale_h=1.0, scale_w=1.0, lean_k=1.0):
-    """Top contour of a run of flame tongues in (along, out) space.
-
-    tongues: list of dicts with a0, a1 (base span), h, lean, curl, asym.
-    Peaks are sharp and flick toward +along; valleys stay soft and round.
+    Holes are dropped (filled); separate islands come back as separate loops,
+    which is what gives the fire its detached, drifting pieces.
     """
-    pts = []
-    for tg in tongues:
-        a0, a1 = tg["a0"], tg["a1"]
-        mid, half = 0.5 * (a0 + a1), 0.5 * (a1 - a0) * scale_w
-        h = tg["h"] * scale_h
-        s, c, nrm = flame_spine(h, tg["lean"] * lean_k, tg["curl"], n=12)
-        w = half * (1 + 0.3 * np.sin(math.pi * np.clip(s / 0.5, 0, 1))) * (1 - s) ** 1.0
-        w[0] = half
-        left = c - nrm * (w * (1 + tg["asym"]))[:, None]
-        right = c + nrm * (w * (1 - tg["asym"]))[:, None]
-        # nrm points to -along at the base, so 'left' starts at a0 side
-        left[:, 0] += mid
-        right[:, 0] += mid
-        left[:, 1] += base_y
-        right[:, 1] += base_y
-        if left[0, 0] > right[0, 0]:
-            left, right = right, left
-        pts.extend(list(left[:-1]))
-        pts.append(0.5 * (left[-1] + right[-1]))
-        pts.extend(list(right[::-1][1:]))
-    return np.array(pts)
+    P = np.pad(V, 1, constant_values=-1e9) - t
+    ny, nx = P.shape
+    ins = P > 0
+    pts = {}
+
+    def edge_pt(key):
+        if key not in pts:
+            kind, i, j = key
+            if kind == 'h':
+                a, b = P[i, j], P[i, j + 1]
+                f = a / (a - b)
+                pts[key] = (j + f, i)
+            else:
+                a, b = P[i, j], P[i + 1, j]
+                f = a / (a - b)
+                pts[key] = (j, i + f)
+        return key
+
+    case = (ins[:-1, :-1].astype(int) | ins[:-1, 1:] << 1 | ins[1:, 1:] << 2 | ins[1:, :-1] << 3)
+    nbr = {}
+    for i, j in zip(*np.nonzero((case > 0) & (case < 15))):
+        c = int(case[i, j])
+        bot, rgt, top, lft = ('h', i, j), ('v', i, j + 1), ('h', i + 1, j), ('v', i, j)
+        e = []
+        crossed = [k for k, bit_a, bit_b in ((bot, 1, 2), (rgt, 2, 4), (top, 8, 4), (lft, 1, 8))
+                   if bool(c & bit_a) != bool(c & bit_b)]
+        if len(crossed) == 2:
+            e.append((crossed[0], crossed[1]))
+        else:                                   # saddle: split by the centre value
+            centre = 0.25 * (P[i, j] + P[i, j + 1] + P[i + 1, j + 1] + P[i + 1, j])
+            if (centre > 0) == bool(c & 1):
+                e += [(bot, rgt), (top, lft)]
+            else:
+                e += [(bot, lft), (top, rgt)]
+        for u, v in e:
+            edge_pt(u), edge_pt(v)
+            nbr.setdefault(u, []).append(v)
+            nbr.setdefault(v, []).append(u)
+    loops, seen = [], set()
+    for start in nbr:
+        if start in seen:
+            continue
+        loop, prev, cur = [], None, start
+        while cur not in seen:
+            seen.add(cur)
+            loop.append(pts[cur])
+            nxt = [n for n in nbr[cur] if n != prev]
+            if not nxt:
+                break
+            prev, cur = cur, nxt[0]
+        if len(loop) < 8:
+            continue
+        L = np.array(loop)
+        L = np.column_stack([x0 + (L[:, 0] - 1) * cell, y0 + (L[:, 1] - 1) * cell])
+        area = 0.5 * np.sum(L[:, 0] * np.roll(L[:, 1], -1) - np.roll(L[:, 0], -1) * L[:, 1])
+        if abs(area) < min_area:
+            continue
+        loops.append((area, L))
+    if not loops:
+        return []
+    # keep outer boundaries only: a hole has the opposite winding to the largest loop
+    sign = np.sign(max(loops, key=lambda t: abs(t[0]))[0])
+    out = []
+    for area, L in loops:
+        if np.sign(area) != sign:
+            continue
+        seg = np.linalg.norm(np.diff(np.vstack([L, L[:1]]), axis=0), axis=1).sum()
+        n = max(10, int(seg / 0.0011))
+        L = resample_polyline(np.vstack([L, L[:1]]), n + 1)[:-1]
+        for _ in range(2):
+            L = 0.5 * L + 0.25 * (np.roll(L, 1, axis=0) + np.roll(L, -1, axis=0))
+        out.append(L)
+    return out
 
 
-def make_tongues(a_start, a_end, rng, h_scale, h_env, sparse=0.0):
-    """Lay out a run of tongues: mostly medium, a few tall ones that steal the show."""
+def flame_clump(rng, span, seed, scale=1.0):
+    """One big, lopsided mass of fire in (along, out) space.
+
+    A dominant tongue plus a few unequal minor ones are summed as a soft distance
+    field over a low wavy bed, the field is domain-warped so every edge wobbles
+    like a drawn line, then sliced at three depths into body / mid / core shapes.
+    """
+    nz1, nz2 = Noise2(seed), Noise2(seed + 1)
     tongues = []
-    a = a_start
-    while a < a_end:
-        b = rng.uniform(0.0085, 0.0165)
-        if a + b > a_end:
-            break
-        env = h_env(a)
-        roll = rng.random()
-        k = rng.uniform(1.1, 1.9) if roll < 0.62 else (rng.uniform(2.2, 3.0) if roll < 0.9 else rng.uniform(3.2, 4.2))
-        h = h_scale * env * k
-        if rng.random() < sparse:
-            h *= 0.3
-        tongues.append(dict(a0=a, a1=a + b, h=max(h, b * 0.7), lean=rng.uniform(0.45, 0.95),
-                            curl=float(rng.choice([-1, 1]) * rng.uniform(0.3, 0.9)),
-                            asym=rng.uniform(-0.2, 0.2)))
-        a += b
-    return tongues
-
-
-FX_LAYERS = (  # (height scale, width scale, lean scale, offset, material slot, valley scale)
-    (1.00, 1.00, 1.00, 0.0, 0, 1.0),
-    (0.66, 0.74, 0.80, 0.00018, 1, 0.6),
-    (0.34, 0.46, 0.55, 0.00036, 2, 0.3),
-)
+    h_dom = rng.uniform(0.032, 0.068) * scale
+    count = int(rng.integers(2, 6))
+    for k in range(count):
+        dom = k == 0
+        h = h_dom if dom else h_dom * rng.uniform(0.18, 0.62)
+        x = rng.uniform(0.15, 0.6) * span if dom else rng.uniform(0.0, 0.95) * span
+        w = (rng.uniform(0.010, 0.017) if dom else rng.uniform(0.006, 0.012)) * (h / 0.04) ** 0.35
+        lean = rng.uniform(0.25, 1.15)
+        curl = float(rng.choice([-1, 1]) * rng.uniform(0.35, 1.1))
+        tongues.append((x, 0.0, h, w, lean, curl))
+    for _ in range(int(rng.integers(0, 3))):     # pieces torn off the top
+        h = h_dom * rng.uniform(0.15, 0.3)
+        tongues.append((rng.uniform(0.3, 1.1) * span, h_dom * rng.uniform(0.8, 1.15), h,
+                        h * rng.uniform(0.45, 0.7), rng.uniform(0.4, 1.0), float(rng.choice([-1, 1]))))
+    cell = 0.0004
+    x_lo, x_hi = -0.012, span + h_dom * 1.3 + 0.01
+    y_lo, y_hi = -0.0016, h_dom * 1.6 + 0.01
+    xs = np.arange(x_lo, x_hi, cell)
+    ys = np.arange(y_lo, y_hi, cell)
+    X, Y = np.meshgrid(xs, ys)
+    amp = 0.0022 + 0.05 * np.clip(Y, 0, None)          # wobble grows toward the tips
+    Xw = X + amp * (nz1.fbm(X / 0.014, Y / 0.014, 3) - 0.5) * 2
+    Yw = Y + 0.6 * amp * (nz2.fbm(X / 0.014 + 9, Y / 0.014, 3) - 0.5) * 2
+    F = np.full(X.shape, -1.0)
+    for (x0, y0, h, w, lean, curl) in tongues:
+        s, c, _ = flame_spine(h, lean, curl, n=26)
+        r = 0.5 * w * (1 + 0.35 * np.sin(np.pi * np.clip(s / 0.45, 0, 1))) * (1 - s) ** 0.85 + 0.0002
+        for (cx, cy), rr in zip(c, r):
+            F = np.maximum(F, rr - np.hypot(Xw - (x0 + cx), Yw - (y0 + cy)))
+    Ft = F.copy()
+    # low bed of flame hugging the edge, uneven along the clump
+    bed_h = rng.uniform(0.003, 0.006) * (0.6 + 0.8 * nz1(Xw / 0.02, 3.3))
+    win = smoothstep(-0.004, 0.012, Xw) * (1 - smoothstep(span - 0.006, span + 0.01, Xw))
+    F = np.maximum(F, (bed_h * win - Yw) * np.where(win > 0.05, 1.0, 0.0) - (1 - win) * 0.01)
+    layers = []
+    for t, ysq in ((0.0, 1.0), (0.0021, 1.0), (0.0042, 1.25)):
+        G = F
+        if ysq != 1.0:   # core: tongues only (no bed), sitting lower in the flame than the body
+            G = np.array([np.interp(ys * ysq, ys, col_) for col_ in Ft.T]).T
+        layers.append(field_contours(G, x_lo, y_lo, cell, t))
+    return layers
 
 
 def build_fx(col, mats):
@@ -2011,7 +2012,6 @@ def build_fx(col, mats):
 
     edge = frames(1.0)
     back = frames(0.0)
-    swell = noise1d(4001, 31, 7)
     Xw = np.array([1.0, 0.0, 0.0])
 
     def to3d(fr, poly, z, roll):
@@ -2041,39 +2041,22 @@ def build_fx(col, mats):
                 mb.add_face([base + i for i in tt], None, None, isl)
         mb.cur_mat = 0
 
-    def fringe(fr, a0, a1, roll, h_scale, sparse, seed, base_y=0.0014, sink=0.0013):
-        a_arr = fr[0]
-        r = np.random.default_rng(seed)
-        def env(a):
-            t = float(np.interp(a, a_arr, dense))
-            burst = 0.5 + 0.5 * swell[int(np.clip(t * 4000, 0, 4000))]
-            return (0.45 + 0.95 * burst ** 1.3) * (0.6 + 0.4 * sstep(0.1, 0.5, t))
-        tongues = make_tongues(a0, a1, r, h_scale, env, sparse)
-        polys = None
-        for attempt in range(14):
-            polys = []
-            for hs, ws, ls, off, mat, vs in FX_LAYERS:
-                poly = fire_contour(tongues, base_y * vs, scale_h=hs, scale_w=ws, lean_k=ls)
-                lo, hi = tongues[0]["a0"], tongues[-1]["a1"]
-                poly = np.vstack([poly, [[hi, -sink * (0.6 + 0.4 * vs)], [lo, -sink * (0.6 + 0.4 * vs)]]])
-                polys.append((poly, off, mat))
-            if not any(segments_intersect(p) for p, _, _ in polys):
-                break
-            for tg in tongues:                    # calm the wildest tongues and retry
-                tg["lean"] *= 0.85
-                tg["curl"] *= 0.8
-        for poly, off, mat in polys:
-            emit(fr, poly, off, mat, roll, both=off > 0)
-
-    # cutting edge: overlapping sections with alternating roll so the fire
-    # still reads when the sword turns
+    # cutting edge: a few big, lopsided masses of fire with ragged gaps between
+    # them, each turned a little differently so the fire still reads in 3D
     total = edge[0][-1]
-    cuts = [0.10, 0.25, 0.39, 0.53, 0.66, 0.78, 0.885, 1.0]
-    rolls = [0.22, -0.3, 0.26, -0.18, 0.32, -0.25, 0.15]
-    for k in range(len(cuts) - 1):
-        a0 = total * cuts[k] - (0.006 if k else 0.0)
-        a1 = total * cuts[k + 1] + (0.004 if k < len(cuts) - 2 else 0.005)
-        fringe(edge, a0, a1, rolls[k], 0.0125 * (1.0 + 0.3 * k / 6), 0.18, seed=300 + k)
+    crng = np.random.default_rng(4711)
+    a = total * 0.105
+    k = 0
+    while a < total * 0.93:
+        span = crng.uniform(0.035, 0.095)
+        scale = 0.75 + 0.5 * sstep(0.1, 0.6, a / total)
+        layers = flame_clump(crng, span, seed=800 + k, scale=scale)
+        roll = crng.uniform(-0.42, 0.42)
+        for (polys, off, mat) in zip(layers, (0.0, 0.00018, CORE_OFFSET), (0, 1, 2)):
+            for poly in polys:
+                emit(edge, poly + np.array([a, 0.0]), off, mat, roll, both=off > 0)
+        k += 1
+        a += span * crng.uniform(0.55, 1.05) + (crng.uniform(0.012, 0.05) if crng.random() < 0.7 else 0.0)
     # back of the blade: a handful of thin, separate licks toward the point
     for j, t in enumerate((0.63, 0.7, 0.755, 0.83, 0.88, 0.94)):
         i = int(t * 4000)
@@ -2291,7 +2274,7 @@ class NodeKit:
         self.nt.links.new(self.sockets[which], self.emit.inputs["Color"])
 
 
-def silver_painter(name, inlay=False, file_marks=False, tone=1.0):
+def silver_painter(name, file_marks=False, tone=1.0):
     k = NodeKit(bpy.data.materials.new(name))
     ao, edge, hl = k.painter_basics()
     nz = k.noise(160.0, 4.0)
@@ -2308,20 +2291,29 @@ def silver_painter(name, inlay=False, file_marks=False, tone=1.0):
         stripes = k.math('SINE', k.mul(k.add(k.mul(u, 0.75), v_), 2 * math.pi / 0.0009))
         col = k.mulc(col, k.gray(k.add(0.93, k.mul(stripes, 0.07))))
         height = k.mul(stripes, 0.000018)
-    if inlay:
-        attr = k.node("ShaderNodeAttribute", attribute_name="band_n", attribute_type='GEOMETRY')
-        _, s_par = k.uv("UVParam")
-        taper = k.mul(k.sstep(0.03, 0.13, s_par), k.sstep(0.03, 0.13, k.sub(1.0, s_par)))
-        width = k.mul(0.075, k.add(0.35, k.mul(taper, 0.65)))
-        dist = k.math('ABSOLUTE', k.sub(attr.outputs["Factor"], -0.28))
-        line = k.mul(k.sub(1.0, k.sstep(0.5, 1.0, k.math('DIVIDE', dist, width))), taper)
-        facing = k.sstep(0.45, 0.7, k.math('ABSOLUTE', k.dot(k.geo.outputs["Normal"], (1.0, 0.0, 0.0))))
-        line = k.mul(line, facing)
-        col = k.mix(col, lin(PAL["ink"]), k.mul(k.sstep(0.0, 0.25, line), 0.9))
-        col = k.mix(col, lin(PAL["glow_hot"]), k.sstep(0.35, 0.8, line))
-        emission = k.mix(k.gray(0.0), lin(PAL["glow_hot"]), k.sstep(0.3, 0.8, line))
-        height = k.mul(line, -0.00022)
     return k.finish(col, emission, (1.0, 0.34, 0.15), height)
+
+
+def enamel_painter(name, lo, mid, hi, stripe, glow=None, glow_amt=0.0):
+    """Glossy lacquer like the drawing: flat painted tone, AO in the steps, diagonal sheen bands."""
+    k = NodeKit(bpy.data.materials.new(name))
+    ao, edge, hl = k.painter_basics(ao_dist=0.004)
+    nz = k.noise(90.0, 3.0)
+    v = k.add(k.add(k.mul(hl, 0.45), k.mul(ao, 0.55)), k.mul(k.sub(nz, 0.5), 0.1))
+    col = k.ramp(v, [(0.0, lo), (0.55, mid), (0.95, hi)])
+    pos = k.node("ShaderNodeSeparateXYZ")
+    k.nt.links.new(k.geo.outputs["Position"], pos.inputs[0])
+    diag = k.add(pos.outputs[1], pos.outputs[2])
+    bands = k.math('SINE', k.mul(diag, 2 * math.pi / 0.011))
+    bands2 = k.math('SINE', k.mul(diag, 2 * math.pi / 0.0043))
+    sheen = k.mul(k.sstep(0.55, 0.7, bands), k.sstep(-0.2, 0.3, bands2))
+    facing = k.sstep(0.6, 0.85, k.math('ABSOLUTE', k.dot(k.geo.outputs["Normal"], (1.0, 0.0, 0.0))))
+    col = k.mix(col, lin(stripe), k.mul(sheen, k.mul(facing, 0.55)))
+    col = k.mix(col, lin(hi), k.mul(edge, 0.35))
+    emi = None
+    if glow is not None:
+        emi = k.mix(k.gray(0.0), lin(glow), k.add(glow_amt, k.mul(nz, glow_amt * 0.5)))
+    return k.finish(col, emi, (1.0, 0.3, 0.0), None)
 
 
 def iron_painter(name, wave_v=None):
@@ -2538,10 +2530,10 @@ def bake_hilt(objs, res, samples):
 PAINTER_SOCKETS = {}
 
 
-def painter(kind, name, **kw):
+def painter(kind, name, *args, **kw):
     fn = {"silver": silver_painter, "iron": iron_painter, "same": same_painter, "silk": silk_painter,
-          "jade": jade_painter}[kind]
-    kit = fn(name, **kw)
+          "jade": jade_painter, "enamel": enamel_painter}[kind]
+    kit = fn(name, *args, **kw)
     PAINTER_SOCKETS[kit.mat.name] = kit.sockets
     return kit.mat
 
@@ -2639,24 +2631,24 @@ def copy_uv(obj, src, dst="UVMap"):
 
 def build_hilt(col):
     parts = {
-        "crescent": build_crescent(col),
-        "habaki": build_habaki(col),
-        "seppa_u": plate(col, "Hilt_SeppaUpper", 0.0, Z_SEPPA_TOP, 0.0088, 0.0235),
+        "guard": build_flame_guard(col),
         "seppa_l": plate(col, "Hilt_SeppaLower", -0.0190, Z_FUCHI_TOP, 0.0147, 0.0192),
         "tsuka": build_tsuka_core(col),
         "ito": build_ito(col),
         "menuki": build_menuki(col),
         "fuchi": build_fuchi(col),
         "kashira": build_kashira(col),
-        "gems": build_gems(col),
         "mekugi": build_mekugi(col),
     }
     cord, tassel, mag = build_sageo(col)
     parts.update(sageo=cord, tassel=tassel, magatama=mag)
     mats = {
-        "crescent": painter("silver", "P_Crescent", inlay=True),
-        "habaki": painter("silver", "P_Habaki", file_marks=True, tone=0.95),
-        "seppa_u": painter("silver", "P_Seppa", tone=0.9),
+        "guard": [painter("enamel", "P_GuardOuter", "#b0154f", "#ff4f9a", "#ff8cbc", "#ffb3d2"),
+                  painter("enamel", "P_GuardMid", "#3a0822", "#7e1549", "#a72a63", "#c5498a"),
+                  painter("enamel", "P_GuardInner", "#e07aa6", "#ffc2da", "#ffe8f1", "#ffffff", "#ff7fb2", 0.35),
+                  painter("enamel", "P_GuardSlit", "#ffd6e8", "#fff1f7", "#ffffff", "#ffffff", "#ffe3ef", 0.9),
+                  painter("enamel", "P_GuardInk", "#0b050d", PAL["ink"], "#2c1630", "#2c1630")],
+        "seppa_l": painter("silver", "P_Seppa", tone=0.9),
         "menuki": painter("silver", "P_Menuki", tone=1.05),
         "tsuka": painter("same", "P_Samegawa"),
         "ito": painter("silk", "P_Ito"),
@@ -2664,13 +2656,12 @@ def build_hilt(col):
         "fuchi": painter("iron", "P_Fuchi", wave_v=0.0036),
         "kashira": painter("iron", "P_Kashira", wave_v=0.0075),
         "mekugi": painter("iron", "P_Mekugi"),
-        "gems": painter("jade", "P_Jade"),
+        "magatama": painter("jade", "P_Jade"),
     }
-    mats["seppa_l"] = mats["seppa_u"]
     mats["tassel"] = mats["sageo"]
-    mats["magatama"] = mats["gems"]
     for key, obj in parts.items():
-        obj.data.materials.append(mats[key])
+        for m in (mats[key] if isinstance(mats[key], list) else [mats[key]]):
+            obj.data.materials.append(m)
     return parts
 
 
@@ -2698,7 +2689,7 @@ def strip_helper_data(objs):
             layer = me.uv_layers.get(name)
             if layer:
                 me.uv_layers.remove(layer)
-        for name in ("island", "band_n"):
+        for name in ("island",):
             a = me.attributes.get(name)
             if a:
                 me.attributes.remove(a)
@@ -2808,7 +2799,7 @@ def main():
     hilt_mat = assign_final_hilt_material(parts, hpaths)
 
     ink = ink_material()
-    outline_src = [parts[k] for k in ("crescent", "habaki", "seppa_u", "seppa_l", "fuchi", "kashira", "ito", "sageo", "magatama")]
+    outline_src = [parts[k] for k in ("guard", "seppa_l", "fuchi", "kashira", "ito", "sageo", "magatama")]
     outline = build_outline(outline_src, col, ink)
 
     root = bpy.data.objects.new("MysticKatana", None)

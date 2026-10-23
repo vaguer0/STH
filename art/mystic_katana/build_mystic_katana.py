@@ -2942,6 +2942,19 @@ def render_fire_loop_video(col, frames_dir, out_path, repeats=8):
     save_rgba(out_path[:-4] + "_frames.png", np.concatenate(tiles, axis=1), name="fire_frames")
 
 
+def tidy_preview_rig():
+    """Move preview lights / cameras into their own collection and hide the cameras."""
+    scene = bpy.context.scene
+    rig = get_collection("Preview_Rig")
+    for ob in list(scene.objects):
+        if ob.type in ('LIGHT', 'CAMERA'):
+            for c in list(ob.users_collection):
+                c.objects.unlink(ob)
+            rig.objects.link(ob)
+            if ob.type == 'CAMERA':
+                ob.hide_set(True)
+
+
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
@@ -2992,9 +3005,10 @@ def main():
 
     os.makedirs(EXPORT_DIR, exist_ok=True)
     setup_live_viewport()
+    tidy_preview_rig()
     blend_path = os.path.join(HERE, "mystic_katana.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend_path, compress=True, relative_remap=True)
-    bpy.ops.file.make_paths_relative()
+    bpy.ops.file.pack_all()           # self-contained: textures travel inside the .blend
     bpy.ops.wm.save_mainfile(compress=True)
 
     swap_ink_for_export(ink)

@@ -3008,7 +3008,13 @@ def main():
     tidy_preview_rig()
     blend_path = os.path.join(HERE, "mystic_katana.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend_path, compress=True, relative_remap=True)
-    bpy.ops.file.pack_all()           # self-contained: textures travel inside the .blend
+    # self-contained: textures travel inside the .blend (drop render/scratch images first)
+    for img in list(bpy.data.images):
+        if img.users == 0:
+            bpy.data.images.remove(img)
+    for img in bpy.data.images:
+        if img.source == 'FILE' and img.packed_file is None:
+            img.pack()
     bpy.ops.wm.save_mainfile(compress=True)
 
     swap_ink_for_export(ink)

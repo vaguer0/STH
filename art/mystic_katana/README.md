@@ -55,8 +55,8 @@ blender --background --python build_mystic_katana.py -- --no-render
   boshi geri döner.
 - **Rünler:** kendi kuralları olan küçük bir alfabe. Gövde, dal, çanak, kanca ve
   noktalardan oluşuyor; fırça baskısıyla çizildi. Harfler kelime gibi tekrar eder,
-  uca doğru yanık kâğıt gibi dağılır. Habakinin üstünde muhafızdaki hilali tekrar eden
-  bir arma var.
+  uca doğru yanık kâğıt gibi dağılır. Muhafızın hemen üstünde, menuki'deki hilali
+  tekrar eden bir arma var.
 - **Kabza:**
   - Muhafız, referans alev çiziminden çıkarılan konturlarla yapıldı: dış, orta, iç
     katman ve parlayan yarık, kalınlığı merkeze doğru artan yuvarlatılmış plakalar.

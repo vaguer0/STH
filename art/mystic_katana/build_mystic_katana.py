@@ -2721,7 +2721,7 @@ def strip_helper_data(objs):
                 me.attributes.remove(a)
 
 
-def export_glb(objs, path):
+def export_glb(objs, path, root_name="MysticKatana", clip_name="SpiritFireLoop"):
     """Join the hilt into one mesh and export the game asset."""
     bpy.ops.object.select_all(action='DESELECT')
     dupes = []
@@ -2752,10 +2752,10 @@ def export_glb(objs, path):
     joined.name = "Katana_Hilt"
     joined.data.name = "Katana_Hilt"
     final = [joined] + others
-    scene_root = bpy.data.objects.get("MysticKatana")
+    scene_root = bpy.data.objects.get(root_name)
     if scene_root:
-        scene_root.name = "MysticKatana__src"
-    root = bpy.data.objects.new("MysticKatana", None)
+        scene_root.name = root_name + "__src"
+    root = bpy.data.objects.new(root_name, None)
     bpy.context.scene.collection.objects.link(root)
     for d in final:
         d.parent = root
@@ -2765,7 +2765,7 @@ def export_glb(objs, path):
         d.select_set(True)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     scene = bpy.context.scene
-    old_name, scene.name = scene.name, "SpiritFireLoop"     # SCENE mode names the clip after the scene
+    old_name, scene.name = scene.name, clip_name           # SCENE mode names the clip after the scene
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True,
                               export_yup=True, export_tangents=True, export_image_format='AUTO',
                               export_animations=True, export_animation_mode='SCENE', export_frame_range=True,
@@ -2783,7 +2783,7 @@ def export_glb(objs, path):
         o.name = o.name[:-5]
         o.data.name = o.data.name[:-5]
     if scene_root:
-        scene_root.name = "MysticKatana"
+        scene_root.name = root_name
     return stats
 
 

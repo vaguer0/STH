@@ -2721,7 +2721,7 @@ def strip_helper_data(objs):
                 me.attributes.remove(a)
 
 
-def export_glb(objs, path, root_name="MysticKatana", clip_name="SpiritFireLoop"):
+def export_glb(objs, path, root_name="MysticKatana", clip_name="SpiritFireLoop", hilt_name="Katana_Hilt"):
     """Join the hilt into one mesh and export the game asset."""
     bpy.ops.object.select_all(action='DESELECT')
     dupes = []
@@ -2749,8 +2749,8 @@ def export_glb(objs, path, root_name="MysticKatana", clip_name="SpiritFireLoop")
     bpy.context.view_layer.objects.active = hilt[0]
     bpy.ops.object.join()
     joined = bpy.context.view_layer.objects.active
-    joined.name = "Katana_Hilt"
-    joined.data.name = "Katana_Hilt"
+    joined.name = hilt_name
+    joined.data.name = hilt_name
     final = [joined] + others
     scene_root = bpy.data.objects.get(root_name)
     if scene_root:
@@ -2787,12 +2787,12 @@ def export_glb(objs, path, root_name="MysticKatana", clip_name="SpiritFireLoop")
     return stats
 
 
-def render_previews(col):
+def render_previews(col, shots=None):
     os.makedirs(RENDER_DIR, exist_ok=True)
     setup_world_and_lights(col)
     o = -GRIP_CENTRE
     spp = 24 if FAST else 96
-    shots = [
+    shots = shots or [
         ("hero", (1.62, 0.36, 0.30 + o), (0, 0.012, 0.25 + o), 50, None, (1100, 2000)),
         ("front", (1.6, 0.0, 0.25 + o), (0, 0.012, 0.25 + o), 50, 1.12, (900, 2000)),
         ("hilt", (0.36, 0.25, 0.0 + o), (0, 0.02, -0.06 + o), 50, None, (1400, 1400)),
@@ -2893,11 +2893,11 @@ def setup_live_viewport():
         scene.camera = cam
 
 
-def render_fire_loop_video(col, frames_dir, out_path, repeats=8):
+def render_fire_loop_video(col, frames_dir, out_path, repeats=8, cam_loc=None, cam_target=None):
     """Render each fire drawing once (with bloom) and cut them on threes into an MP4."""
     scene = bpy.context.scene
     o = -GRIP_CENTRE
-    cam = add_camera(col, "Cam_loop", (1.62, 0.36, 0.30 + o), (0, 0.012, 0.25 + o), lens=50)
+    cam = add_camera(col, "Cam_loop", cam_loc or (1.62, 0.36, 0.30 + o), cam_target or (0, 0.012, 0.25 + o), lens=50)
     os.makedirs(frames_dir, exist_ok=True)
     stills = []
     for i in range(FX_FRAMES):

@@ -398,6 +398,28 @@ def make_materials():
     flat_mat("M_Bush", "#4b8a35", rough=0.9)
     flat_mat("M_BushLight", "#68a843", rough=0.9)
     flat_mat("M_PaintRed", "#c63a2a", rough=0.8)
+    flat_mat("M_Terracotta", "#c0673e", rough=0.9)
+    flat_mat("M_Bone", "#eee4c8", rough=0.8)
+    flat_mat("M_Dark", "#1c1712", rough=1.0)
+    flat_mat("M_Glass", "#5fb488", rough=0.08, alpha=0.75)
+    flat_mat("M_GlassBrown", "#7a4a1e", rough=0.12)
+    flat_mat("M_Paper", "#f1e5c3", rough=0.95)
+    flat_mat("M_Leather", "#6e3f22", rough=0.8)
+    flat_mat("M_Sack", "#c9a974", rough=1.0)
+    flat_mat("M_Rope", "#c2a067", rough=1.0)
+    flat_mat("M_Shell", "#f4d3c0", rough=0.6)
+    flat_mat("M_Starfish", "#ec7a3a", rough=0.8)
+    flat_mat("M_Crab", "#d9482f", rough=0.6)
+    flat_mat("M_Steel", "#b9bcc4", rough=0.3, metal=0.9)
+    flat_mat("M_Driftwood", "#c9b9a0", rough=0.95)
+    flat_mat("M_Mushroom", "#d8483a", rough=0.7)
+    flat_mat("M_MushroomStem", "#f2e8d2", rough=0.9)
+    flat_mat("M_Wax", "#f4ecd6", rough=0.6)
+    flat_mat("M_FlagBlack", "#1d1b1e", rough=0.95)
+    flat_mat("M_GemBlue", "#3aa6ff", rough=0.1, emit="#3aa6ff", emit_strength=1.5)
+    flat_mat("M_GemRed", "#e2304d", rough=0.1, emit="#e2304d", emit_strength=1.5)
+    flat_mat("M_LanternGlow", "#ffd27a", emit="#ffb340", emit_strength=4.0)
+    flat_mat("M_CatalogFloor", "#eadcbd", rough=1.0)
     flat_mat("M_Flame", "#ff7a1f", emit="#ff7a1f", emit_strength=8.0)
     flat_mat("M_FlameCore", "#ffe08a", emit="#ffe08a", emit_strength=12.0)
     for m in MATS.values():
@@ -686,6 +708,10 @@ def build_temple(col, lights):
         p = TEMPLE + [sx * 1.9, -6.1]
         torch(g, (p[0] - TEMPLE[0], p[1] - TEMPLE[1], gz(p) - TEMPLE_Z), lights)
     lights[:] = [l + [TEMPLE[0], TEMPLE[1], TEMPLE_Z] for l in lights]
+    SOLIDS.extend((TEMPLE + [sx * 1.9, -6.1], 0.3) for sx in (-1, 1))
+    for p0, p1 in [((1.8, 5.4), (4.6, 6.6)), ((5.0, 4.8), (6.4, 2.6)), ((-4.8, 5.2), (-3.0, 6.6))]:
+        for t in (0.15, 0.5, 0.85):
+            SOLIDS.append((TEMPLE + np.array(p0) * (1 - t) + np.array(p1) * t, 0.6))
     return emit("Temple_Ruins", g, col, loc=(TEMPLE[0], TEMPLE[1], TEMPLE_Z))
 
 
@@ -784,6 +810,7 @@ def build_shipwreck(col):
             crate(cargo, (p[0], p[1], gz(p) - 0.1), 0.6, 0.7)
         else:
             barrel(cargo, (p[0], p[1], gz(p) - 0.05), seed=k, lying=k == 0)
+        SOLIDS.append((p, 0.7))
     emit("Shipwreck_Cargo", cargo, col)
     return ob
 
@@ -826,6 +853,7 @@ def build_arch(col):
     axis = np.array([math.cos(0.5), math.sin(0.5)])
     for k, s in enumerate((-1, 1)):
         p = ARCH + axis * 2.3 * s
+        SOLIDS.append((p, 1.9))
         rock(g, (p[0], p[1], gz(p) + 1.2), (1.5, 1.7, 2.6), "M_Rock", seed=40 + k, yaw=0.5, sink=0.1)
     lz = gz(ARCH) + 3.6
     rock(g, (ARCH[0], ARCH[1], lz), (3.9, 1.6, 1.15), "M_RockDark", seed=44, yaw=0.5, subdiv=2, rough=0.12)
@@ -836,6 +864,7 @@ def build_arch(col):
         p = ARCH + rng.uniform(3.8, 5.5) * np.array([math.cos(a), math.sin(a)])
         s = rng.uniform(0.5, 1.1)
         rock(g, (p[0], p[1], gz(p) + s * 0.3), (s * 1.2, s, s * 0.8), "M_Rock", seed=50 + k, yaw=a)
+        SOLIDS.append((p, s * 1.3))
     return emit("Rock_Arch", g, col)
 
 
@@ -880,6 +909,11 @@ def build_camp(col, lights):
     d = (np.array([*TEMPLE, 0]) - p) * [1, 1, 0]
     d /= np.linalg.norm(d)
     beam(g, p + [0, 0, 1.45] - d * 0.1, p + [0, 0, 1.45] + d * 0.8, 0.22, 0.05, "M_WoodLight")
+    cxy = CAMP
+    SOLIDS.extend([(cxy, 1.3), (TREASURE_SPAWNS[3][1], 1.9), (cxy + [1.8, 1.6], 0.45), (cxy + [2.3, 1.1], 0.45),
+                   (cxy + [1.9, -1.6], 0.55), (cxy + [2.8, 0.8], 0.3)])
+    for a in (2.3, 4.1):
+        SOLIDS.append((cxy + 1.9 * np.array([math.cos(a), math.sin(a)]), 0.9))
     return emit("Pirate_Camp", g, col)
 
 
@@ -892,6 +926,7 @@ def build_x_mark(col, xy):
     tube(g, (xy[0] + 1.1, xy[1] + 0.4, gz(xy) - 0.3), (xy[0] + 1.2, xy[1] + 0.5, gz(xy) + 1.0), 0.05,
          mat="M_WoodDark", n=6)  # a shovel handle left behind
     box(g, (xy[0] + 1.22, xy[1] + 0.52, gz(xy) + 1.0), (0.12, 0.3, 0.05), "M_Iron", rot=(0.2, 0, 0.3))
+    SOLIDS.append((np.asarray(xy, float) + [0.6, 0.2], 1.4))
     return emit("X_Marks_The_Spot", g, col)
 
 
@@ -960,7 +995,9 @@ def build_vegetation(col):
     for k, (dx, dy, s) in enumerate([(-1.4, 0.9, 1.4), (1.3, 1.2, 1.1), (0.2, 2.0, 0.9)]):
         p = nb + [dx, dy]
         rock(g, (p[0], p[1], gz(p) + 0.2), (s * 1.3, s, s), "M_Rock", seed=400 + k, yaw=k)
+        SOLIDS.append((p, s * 1.4))
     emit("Rocks", g, col)
+    SOLIDS.extend([(p, 0.45) for p in palms] + [(p, 0.8) for p in bushes] + [(p, 1.25) for p in rocks])
     return palms, bushes, rocks
 
 
@@ -994,7 +1031,456 @@ def build_spawns(col):
         yaw = math.atan2(-DOCK_DIR[1], -DOCK_DIR[0])
         marker(f"PlayerSpawn_{k + 1:02d}", col, (p[0], p[1], gz(p)), "player_spawn", yaw, size=0.9, index=k + 1)
         players.append(p)
+    SOLIDS.extend([(np.array(p[:2]), 1.0) for _, p in spawns] + [(p, 0.8) for p in players])
     return spawns, players
+
+
+# ---------------------------------------------------------------------------
+# treasure props: 200 everyday items, any of which can hide the treasure
+# ---------------------------------------------------------------------------
+# Every item type is built once; the placed props are separate objects sharing that
+# mesh, so the glb stores each shape only once.  Items are placed by zone (beach,
+# palm shade, temple, camp, wreck, arch, dock, islet, inland) so each spot gets
+# things that belong there: shells on the beach, urns in the temple, cannonballs
+# around the wreck.
+
+def lathe(g, prof, mat, n=10, cap_top=True, cap_bottom=True):
+    """prof: list of (radius, z); a surface of revolution around +z."""
+    a = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    rings = [np.stack([max(r, 1e-3) * np.cos(a), max(r, 1e-3) * np.sin(a), np.full(n, z)], axis=1) for r, z in prof]
+    return loft(g, rings, mat, cap_start=cap_bottom, cap_end=cap_top)
+
+
+def ring_path(g, R, r, mat, n=16, m=6, z=0.0, turns=1.0, rise=0.0):
+    """Tube bent around a circle of radius R (a torus, or a coil when rise > 0)."""
+    rings = []
+    for i in range(int(n * turns) + 1):
+        t = 2 * np.pi * i / n
+        c = np.array([R * math.cos(t), R * math.sin(t), z + rise * i / n])
+        out = np.array([math.cos(t), math.sin(t), 0])
+        b = np.linspace(0, 2 * np.pi, m, endpoint=False)
+        rings.append(c + r * (np.cos(b)[:, None] * out + np.sin(b)[:, None] * [0, 0, 1]))
+    return loft(g, rings, mat)
+
+
+def ball(g, c, r, mat, subdiv=1, squash=(1, 1, 1)):
+    v, f = ico(subdiv)
+    return g.add(v * r * np.asarray(squash, float) + c, f, mat)
+
+
+def item_geo(kind):
+    g = Geo()
+    if kind == "barrel":
+        barrel(g, (0, 0, 0))
+    elif kind == "crate":
+        crate(g, (0, 0, 0), 0.6)
+    elif kind == "small_chest":
+        g.merge(chest_geo(False), scale=0.6)
+    elif kind == "coconut":
+        ball(g, (0, 0, 0.11), 0.13, "M_Coconut", squash=(1, 0.9, 0.85))
+    elif kind == "coconuts":
+        for p in ((0, 0, 0.1), (0.2, 0.06, 0.1), (0.09, 0.18, 0.1), (0.1, 0.08, 0.27)):
+            ball(g, p, 0.12, "M_Coconut", squash=(1, 0.9, 0.85))
+    elif kind == "sack":
+        rock(g, (0, 0, 0.26), (0.3, 0.25, 0.3), "M_Sack", seed=7, rough=0.08, sink=0.15)
+        tube(g, (0, 0, 0.5), (0, 0, 0.66), 0.08, 0.13, "M_Sack", n=7)
+        tube(g, (0, 0, 0.53), (0, 0, 0.57), 0.09, mat="M_Rope", n=7)
+    elif kind == "coin_pouch":
+        rock(g, (0, 0, 0.12), (0.14, 0.12, 0.14), "M_ClothRed", seed=8, rough=0.08, sink=0.15)
+        tube(g, (0, 0, 0.23), (0, 0, 0.31), 0.04, 0.07, "M_ClothRed", n=7)
+        coin_pile(g, (0.26, 0.05, 0), 0.09, seed=4)
+    elif kind == "amphora":
+        lathe(g, [(0.07, 0), (0.15, 0.1), (0.2, 0.28), (0.17, 0.46), (0.07, 0.6), (0.06, 0.72), (0.09, 0.75)],
+              "M_Terracotta", n=10)
+        for s in (-1, 1):
+            tube(g, (s * 0.08, 0, 0.7), (s * 0.18, 0, 0.62), 0.02, mat="M_Terracotta", n=5)
+            tube(g, (s * 0.18, 0, 0.62), (s * 0.17, 0, 0.47), 0.02, mat="M_Terracotta", n=5)
+    elif kind == "urn":
+        lathe(g, [(0.12, 0), (0.24, 0.12), (0.27, 0.3), (0.2, 0.46), (0.21, 0.5)], "M_StoneDark", n=10)
+        lathe(g, [(0.22, 0.5), (0.18, 0.56), (0.05, 0.6), (0.06, 0.66)], "M_Stone", n=10)
+        tube(g, (-0.27, 0, 0.32), (0.27, 0, 0.32), 0.02, mat="M_Gold", n=5)
+    elif kind == "clay_pot":
+        lathe(g, [(0.12, 0), (0.2, 0.08), (0.22, 0.18), (0.15, 0.3), (0.17, 0.33)], "M_Terracotta", n=10,
+              cap_top=False)
+    elif kind == "cooking_pot":
+        lathe(g, [(0.15, 0.1), (0.24, 0.16), (0.25, 0.34), (0.27, 0.37)], "M_Iron", n=12, cap_top=False)
+        for k in range(3):
+            a = 2 * np.pi * k / 3
+            tube(g, (0.16 * math.cos(a), 0.16 * math.sin(a), 0.12), (0.2 * math.cos(a), 0.2 * math.sin(a), 0),
+                 0.025, mat="M_Iron", n=5)
+        tube(g, (-0.27, 0, 0.36), (0, 0, 0.6), 0.015, mat="M_Iron", n=5)
+        tube(g, (0, 0, 0.6), (0.27, 0, 0.36), 0.015, mat="M_Iron", n=5)
+    elif kind == "bucket":
+        lathe(g, [(0.15, 0), (0.19, 0.32)], "M_Wood", n=10, cap_top=False)
+        for z in (0.05, 0.26):
+            lathe(g, [(0.155 + z * 0.13 + 0.008, z), (0.16 + z * 0.13 + 0.008, z + 0.04)], "M_Iron", n=10)
+        tube(g, (-0.19, 0, 0.3), (0, 0, 0.48), 0.012, mat="M_Iron", n=4)
+        tube(g, (0, 0, 0.48), (0.19, 0, 0.3), 0.012, mat="M_Iron", n=4)
+    elif kind == "bottle":  # message in a bottle, lying in the sand
+        b = Geo()
+        lathe(b, [(0.06, 0), (0.07, 0.03), (0.07, 0.2), (0.03, 0.27), (0.025, 0.32)], "M_Glass", n=8)
+        tube(b, (0, 0, 0.31), (0, 0, 0.35), 0.022, mat="M_Wood", n=6)
+        tube(b, (0, 0, 0.05), (0, 0, 0.2), 0.035, mat="M_Paper", n=6)
+        g.merge(b, loc=(0, 0.17, 0.065), rot=(math.radians(90), 0, 0))
+    elif kind == "rum_bottle":
+        lathe(g, [(0.06, 0), (0.065, 0.18), (0.03, 0.25), (0.022, 0.32)], "M_GlassBrown", n=8)
+        tube(g, (0, 0, 0.07), (0, 0, 0.14), 0.067, mat="M_Paper", n=8)
+        tube(g, (0, 0, 0.31), (0, 0, 0.35), 0.02, mat="M_Wood", n=6)
+    elif kind == "skull":
+        ball(g, (0, 0, 0.13), 0.13, "M_Bone", subdiv=2, squash=(0.85, 1.0, 0.85))
+        box(g, (0, -0.07, 0.04), (0.14, 0.1, 0.06), "M_Bone")
+        for s in (-1, 1):
+            ball(g, (s * 0.045, -0.105, 0.14), 0.035, "M_Dark")
+            tube(g, (s * 0.25, -0.15, 0.02), (-s * 0.25, 0.15, 0.02), 0.022, mat="M_Bone", n=5)
+        ball(g, (0, -0.125, 0.09), 0.018, "M_Dark")
+    elif kind == "shell":
+        n = 9
+        ang = np.linspace(math.radians(25), math.radians(155), n)
+        v = [[0, -0.07, 0.01], [0, -0.03, 0.0]]
+        for i, a in enumerate(ang):
+            r = 0.13
+            v.append([r * math.cos(a), -0.07 + r * math.sin(a), 0.035 + (0.012 if i % 2 else 0)])
+        f = [[0, 2 + i, 3 + i] for i in range(n - 1)] + [[1, 3 + i, 2 + i] for i in range(n - 1)]
+        g.add(v, f, "M_Shell")
+    elif kind == "starfish":
+        n = 5
+        v = [[0, 0, 0.045], [0, 0, 0.0]]
+        for i in range(2 * n):
+            a = math.pi / 2 + math.pi * i / n
+            r = 0.17 if i % 2 == 0 else 0.065
+            v.append([r * math.cos(a), r * math.sin(a), 0.012])
+        m = 2 * n
+        f = [[0, 2 + i, 2 + (i + 1) % m] for i in range(m)] + [[1, 2 + (i + 1) % m, 2 + i] for i in range(m)]
+        g.add(v, f, "M_Starfish")
+    elif kind == "lantern":
+        box(g, (0, 0, 0.03), (0.2, 0.2, 0.06), "M_Iron")
+        box(g, (0, 0, 0.17), (0.15, 0.15, 0.22), "M_LanternGlow")
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                box(g, (sx * 0.085, sy * 0.085, 0.17), (0.025, 0.025, 0.24), "M_Iron")
+        tube(g, (0, 0, 0.28), (0, 0, 0.38), 0.13, 0.0, "M_Iron", n=4, phase=math.pi / 4)
+        tube(g, (0, 0, 0.38), (0, 0, 0.44), 0.012, mat="M_Iron", n=4)
+    elif kind == "cannonballs":
+        r = 0.1
+        for layer, nn in enumerate((3, 2, 1)):
+            off = (3 - nn) * r
+            for i in range(nn):
+                for j in range(nn):
+                    ball(g, (-2 * r + off + 2 * r * i, -2 * r + off + 2 * r * j, r + layer * r * 1.42), r, "M_Iron")
+    elif kind == "anchor":
+        a = Geo()
+        tube(a, (0, 0, 0.0), (0, 0, 1.1), 0.045, mat="M_Iron", n=6)
+        tube(a, (-0.3, 0, 0.9), (0.3, 0, 0.9), 0.035, mat="M_Iron", n=6)
+        ring_path(a, 0.08, 0.02, "M_Iron", n=10, m=5, z=1.17)
+        for s in (-1, 1):
+            tube(a, (0, 0, 0.02), (s * 0.3, 0, 0.16), 0.045, mat="M_Iron", n=6)
+            tube(a, (s * 0.3, 0, 0.16), (s * 0.4, 0, 0.36), 0.04, mat="M_Iron", n=6)
+            tube(a, (s * 0.4, 0, 0.36), (s * 0.46, 0, 0.42), 0.07, 0.0, "M_Iron", n=4)
+        g.merge(a, loc=(0, -0.45, 0.07), rot=(math.radians(-78), 0, 0))
+    elif kind == "ship_wheel":
+        w = Geo()
+        ring_path(w, 0.42, 0.035, "M_WoodDark", n=16, m=5)
+        tube(w, (0, 0, -0.06), (0, 0, 0.06), 0.09, mat="M_WoodLight", n=8)
+        for k in range(8):
+            a = 2 * np.pi * k / 8
+            d = np.array([math.cos(a), math.sin(a), 0])
+            tube(w, d * 0.08, d * 0.58, 0.025, mat="M_WoodLight", n=5)
+            tube(w, d * 0.5, d * 0.62, 0.035, 0.025, "M_WoodDark", n=5)
+        g.merge(w, loc=(0, 0, 0.62), rot=(math.radians(78), 0, 0))
+    elif kind == "cannon":
+        box(g, (0, 0, 0.2), (0.45, 0.85, 0.2), "M_WoodDark")
+        for sx in (-1, 1):
+            for y in (-0.3, 0.3):
+                tube(g, (sx * 0.22, y, 0.14), (sx * 0.3, y, 0.14), 0.14, mat="M_Wood", n=8)
+        tube(g, (0, -0.45, 0.42), (0, 0.65, 0.48), 0.15, 0.11, "M_Iron", n=10)
+        ball(g, (0, -0.48, 0.42), 0.12, "M_Iron")
+        tube(g, (0, 0.6, 0.475), (0, 0.7, 0.48), 0.13, mat="M_Iron", n=10)
+    elif kind == "rope_coil":
+        ring_path(g, 0.2, 0.045, "M_Rope", n=14, m=6, z=0.045, turns=2.6, rise=0.075)
+    elif kind == "idol":
+        box(g, (0, 0, 0.08), (0.36, 0.36, 0.16), "M_StoneDark")
+        box(g, (0, 0, 0.36), (0.24, 0.2, 0.4), "M_Stone")
+        box(g, (0, 0, 0.67), (0.3, 0.26, 0.24), "M_Gold")
+        for s in (-1, 1):
+            box(g, (s * 0.07, -0.135, 0.7), (0.06, 0.02, 0.04), "M_GemRed")
+            box(g, (s * 0.16, -0.02, 0.38), (0.06, 0.12, 0.2), "M_Stone")
+        box(g, (0, 0, 0.83), (0.36, 0.08, 0.08), "M_Gold")
+    elif kind == "gems":
+        rock(g, (0, 0, 0.05), (0.25, 0.2, 0.12), "M_RockDark", seed=12, sink=0.4)
+        rng = np.random.default_rng(13)
+        for k in range(5):
+            a = 2 * np.pi * k / 5 + rng.uniform(-.3, .3)
+            p = np.array([0.1 * math.cos(a), 0.08 * math.sin(a), 0.08])
+            tip = p + [0.12 * math.cos(a), 0.12 * math.sin(a), rng.uniform(0.18, 0.32)]
+            tube(g, p, tip, 0.05, 0.0, "M_GemBlue" if k % 2 else "M_GemRed", n=5)
+    elif kind == "stump":
+        tube(g, (0, 0, -0.1), (0, 0, 0.38), 0.3, 0.27, "M_Wood", n=9)
+        tube(g, (0, 0, 0.38), (0, 0, 0.4), 0.25, mat="M_WoodLight", n=9)
+        for k in range(3):
+            a = 2 * np.pi * k / 3 + 0.4
+            d = np.array([math.cos(a), math.sin(a), 0])
+            tube(g, d * 0.22 + [0, 0, 0.08], d * 0.5 + [0, 0, -0.02], 0.08, 0.04, "M_Wood", n=6)
+    elif kind == "driftwood":
+        tube(g, (-0.7, 0, 0.1), (0.7, 0.1, 0.09), 0.1, 0.07, "M_Driftwood", n=7)
+        tube(g, (0.1, 0.05, 0.1), (0.45, 0.4, 0.14), 0.05, 0.02, "M_Driftwood", n=5)
+    elif kind == "shovel":
+        tube(g, (0, 0, -0.1), (0.12, 0.05, 1.0), 0.025, mat="M_Wood", n=6)
+        box(g, (0.0, 0.0, 0.0), (0.2, 0.04, 0.26), "M_Iron", rot=(0, 0.12, 0))
+        box(g, (0.13, 0.055, 1.02), (0.16, 0.035, 0.035), "M_WoodDark")
+    elif kind == "sword":
+        s = Geo()
+        beam(s, (0, 0, -0.25), (0, 0, 0.55), 0.06, 0.012, "M_Steel")
+        box(s, (0, 0, 0.57), (0.26, 0.05, 0.04), "M_Gold")
+        tube(s, (0, 0, 0.59), (0, 0, 0.76), 0.022, mat="M_ClothRed", n=6)
+        ball(s, (0, 0, 0.79), 0.035, "M_Gold")
+        g.merge(s, rot=(0.15, -0.1, 0))
+    elif kind == "helmet":
+        lathe(g, [(0.2, 0.0), (0.19, 0.08), (0.15, 0.16), (0.08, 0.21), (0.01, 0.22)], "M_Steel", n=12)
+        lathe(g, [(0.2, 0.0), (0.3, 0.02), (0.31, 0.04), (0.2, 0.03)], "M_Steel", n=12)
+        beam(g, (0, -0.15, 0.17), (0, 0.15, 0.17), 0.02, 0.14, "M_Steel")
+    elif kind == "book":
+        box(g, (0, 0, 0.04), (0.3, 0.22, 0.08), "M_ClothRed", rot=(0, 0, 0.2))
+        box(g, (0.01, 0, 0.04), (0.29, 0.2, 0.066), "M_Paper", rot=(0, 0, 0.2))
+        box(g, (0.03, 0.01, 0.1), (0.26, 0.19, 0.05), "M_Leather", rot=(0, 0, -0.35))
+        box(g, (0.04, 0.01, 0.1), (0.25, 0.17, 0.038), "M_Paper", rot=(0, 0, -0.35))
+    elif kind == "scroll":
+        tube(g, (-0.2, 0, 0.045), (0.2, 0, 0.045), 0.045, mat="M_Paper", n=8)
+        tube(g, (-0.03, 0, 0.045), (0.03, 0, 0.045), 0.05, mat="M_ClothRed", n=8)
+        tube(g, (-0.24, 0, 0.045), (-0.2, 0, 0.045), 0.02, mat="M_WoodDark", n=6)
+        tube(g, (0.2, 0, 0.045), (0.24, 0, 0.045), 0.02, mat="M_WoodDark", n=6)
+    elif kind == "mushrooms":
+        for (x, y, h, r) in ((0, 0, 0.22, 0.13), (0.17, 0.08, 0.14, 0.09), (-0.1, 0.14, 0.1, 0.07)):
+            tube(g, (x, y, 0), (x, y, h), r * 0.35, r * 0.3, "M_MushroomStem", n=6)
+            lathe(g, [(r * 0.4, h - 0.01), (r, h + 0.01), (r * 0.8, h + r * 0.45), (0.0, h + r * 0.6)],
+                  "M_Mushroom", n=9, cap_top=False)
+    elif kind == "candles":
+        for (x, y, h) in ((0, 0, 0.26), (0.1, 0.06, 0.18), (-0.07, 0.09, 0.13)):
+            tube(g, (x, y, 0), (x, y, h), 0.035, mat="M_Wax", n=7)
+            tube(g, (x, y, h + 0.005), (x, y, h + 0.07), 0.018, 0.0, "M_FlameCore", n=5)
+    elif kind == "bell":
+        lathe(g, [(0.2, 0.0), (0.21, 0.02), (0.15, 0.12), (0.13, 0.28), (0.09, 0.33), (0.0, 0.34)], "M_Gold",
+              n=12, cap_bottom=False)
+        tube(g, (0, 0, 0.33), (0, 0, 0.4), 0.03, mat="M_Gold", n=6)
+        ball(g, (0, 0, 0.05), 0.04, "M_Iron")
+    elif kind == "crab":
+        ball(g, (0, 0, 0.07), 0.12, "M_Crab", squash=(1.2, 0.85, 0.5))
+        for s in (-1, 1):
+            ball(g, (s * 0.04, -0.1, 0.13), 0.018, "M_Dark")
+            tube(g, (s * 0.1, -0.06, 0.06), (s * 0.18, -0.15, 0.06), 0.022, mat="M_Crab", n=5)
+            ball(g, (s * 0.2, -0.19, 0.06), 0.05, "M_Crab", squash=(0.8, 1.2, 0.7))
+            for k in range(3):
+                y = -0.03 + 0.05 * k
+                tube(g, (s * 0.12, y, 0.06), (s * 0.24, y + 0.03, 0.01), 0.012, mat="M_Crab", n=4)
+    elif kind == "tankard":
+        lathe(g, [(0.07, 0), (0.08, 0.18)], "M_WoodLight", n=9, cap_top=False)
+        for z in (0.02, 0.15):
+            lathe(g, [(0.078, z), (0.085, z + 0.025)], "M_Iron", n=9)
+        tube(g, (0.08, 0, 0.15), (0.13, 0, 0.13), 0.012, mat="M_Iron", n=4)
+        tube(g, (0.13, 0, 0.13), (0.13, 0, 0.05), 0.012, mat="M_Iron", n=4)
+        tube(g, (0.13, 0, 0.05), (0.08, 0, 0.04), 0.012, mat="M_Iron", n=4)
+    elif kind == "flag":
+        tube(g, (0, 0, -0.2), (0, 0, 1.5), 0.025, mat="M_WoodDark", n=6)
+        v = [[0, 0, 1.45], [0.32, 0.03, 1.4], [0.6, -0.02, 1.47], [0, 0, 1.1], [0.3, 0.04, 1.08], [0.58, 0.0, 1.13]]
+        g.add(v, [[0, 3, 4, 1], [1, 4, 5, 2]], "M_FlagBlack")
+        ball(g, (0.25, 0.04, 1.29), 0.06, "M_Bone")
+    else:
+        raise ValueError(kind)
+    return g
+
+
+ITEM_RADIUS = {"anchor": 0.8, "cannon": 0.8, "ship_wheel": 0.7, "driftwood": 0.8, "barrel": 0.4, "crate": 0.45,
+               "stump": 0.5, "cannonballs": 0.35, "small_chest": 0.35, "flag": 0.4}
+ZONE_ITEMS = {
+    "beach": ["shell", "starfish", "bottle", "coconut", "driftwood", "crab", "bucket", "rope_coil", "shell",
+              "starfish", "crab", "small_chest", "flag"],
+    "palms": ["coconut", "coconuts", "sack", "coconut", "bucket", "coconuts"],
+    "temple": ["amphora", "urn", "clay_pot", "idol", "skull", "gems", "candles", "book", "scroll", "bell",
+               "helmet", "sword", "coin_pouch"],
+    "camp": ["barrel", "crate", "sack", "lantern", "bucket", "rum_bottle", "cooking_pot", "rope_coil",
+             "coin_pouch", "scroll", "book", "small_chest", "shovel", "tankard"],
+    "wreck": ["cannonballs", "anchor", "ship_wheel", "cannon", "barrel", "crate", "rum_bottle", "bottle",
+              "helmet", "sword", "rope_coil", "bell", "lantern"],
+    "arch": ["skull", "lantern", "gems", "mushrooms", "candles", "clay_pot", "sword", "coin_pouch"],
+    "dock": ["crate", "barrel", "rope_coil", "bucket", "lantern", "sack"],
+    "islet": ["coconut", "shell", "bottle", "starfish"],
+    "inland": ["mushrooms", "stump", "sack", "clay_pot", "shovel", "sword", "helmet", "coconut", "lantern",
+               "skull", "gems", "small_chest", "tankard", "flag", "amphora"],
+}
+# (zone, count, centre, radius, height range)
+ZONE_PLAN = [
+    ("beach", 44, None, None, (-0.15, 0.85)),
+    ("palms", 22, None, None, (0.1, 3.5)),
+    ("temple", 30, TEMPLE, 8.5, (0.0, 20.0)),
+    ("camp", 20, CAMP, 6.0, (0.3, 6.0)),
+    ("wreck", 20, None, 8.5, (-0.1, 4.0)),
+    ("arch", 12, ARCH, 6.0, (0.5, 12.0)),
+    ("dock", 6, None, None, None),
+    ("islet", 5, ISLET, 3.4, (0.0, 3.0)),
+    ("inland", 41, np.zeros(2), 26.0, (0.9, 20.0)),
+]
+SOLIDS = []  # (xy, radius) footprints props must keep clear of
+TEMPLE_TIERS = ((4.5, 0.45), (3.6, 1.05), (2.8, 1.6))  # (half size, top z above TEMPLE_Z)
+
+
+def temple_surface(p):
+    """Height of the temple platform under p (None on stairs, pillars and altar)."""
+    q = p - TEMPLE
+    cheb = max(abs(q[0]), abs(q[1]))
+    if q[1] < -2.4 and abs(q[0]) < 1.9:
+        return None
+    if abs(q[0]) < 1.05 and abs(q[1] - 0.7) < 0.8:
+        return None
+    for px_, py_ in [(-2.2, 2.2), (0, 2.2), (2.2, 2.2), (-2.2, 0), (2.2, 0), (-2.2, -2.2), (2.2, -2.2)]:
+        if math.hypot(q[0] - px_, q[1] - py_) < 0.75:
+            return None
+    z = None
+    for half, top in TEMPLE_TIERS:
+        if cheb < half - 0.25:
+            z = TEMPLE_Z + top
+        elif cheb < half + 0.1:
+            return None  # too close to a tier edge
+    return z
+
+
+def prop_spot(p, rad, h_range, taken, wreck_ob):
+    """Ground height for a prop at p, or None if the spot is blocked."""
+    q = p - TEMPLE
+    if max(abs(q[0]), abs(q[1])) < 4.6:
+        z = temple_surface(p)
+    else:
+        z = gz(p)
+        if not (h_range[0] <= z <= h_range[1]):
+            return None
+        e = 0.6
+        sl = math.hypot(gz(p + [e, 0]) - gz(p - [e, 0]), gz(p + [0, e]) - gz(p - [0, e])) / (2 * e)
+        if sl > 0.5:
+            return None
+    if z is None:
+        return None
+    # wreck hull (in its own frame) and the dock corridor
+    inv = Euler(wreck_ob.rotation_euler).to_matrix().inverted()
+    lp = inv @ Vector((p[0] - wreck_ob.location.x, p[1] - wreck_ob.location.y, z - wreck_ob.location.z))
+    if abs(lp.x) < 5.6 + rad and abs(lp.y) < 2.4 + rad:
+        return None
+    d = p - DOCK_BASE
+    along, across = d @ DOCK_DIR, d @ np.array([-DOCK_DIR[1], DOCK_DIR[0]])
+    if -0.5 < along < DOCK_LEN + 0.5 and abs(across) < 1.6 + rad:
+        return None
+    for c, r in SOLIDS:
+        if math.hypot(*(p - c)) < r + rad:
+            return None
+    for c, r in taken:
+        if math.hypot(*(p - c)) < r + rad + 0.35:
+            return None
+    if float(path_dist(np.array([p[0]]), np.array([p[1]]))[0]) < 0.7 + rad:
+        return None
+    return z
+
+
+def build_treasure_props(col, palms, wreck_ob):
+    rng = np.random.default_rng(2024)
+    kinds = sorted({k for v in ZONE_ITEMS.values() for k in v})
+    meshes = {}
+    for k in kinds:
+        ob = emit(f"_item_{k}", item_geo(k), col)
+        meshes[k] = ob.data
+        meshes[k].name = f"Item_{k}"
+        bpy.data.objects.remove(ob)
+    taken = []  # (xy, radius)
+    placed = []  # (kind, zone, (x, y, z), yaw)
+    for zone, count, centre, radius, h_range in ZONE_PLAN:
+        pool = list(ZONE_ITEMS[zone])
+        rng.shuffle(pool)
+        got, tries = 0, 0
+        while got < count and tries < 20000:
+            tries += 1
+            kind = pool[got % len(pool)]
+            rad = ITEM_RADIUS.get(kind, 0.3)
+            yaw = float(rng.uniform(0, 2 * np.pi))
+            if zone == "dock":
+                along = rng.uniform(1.0, DOCK_LEN - 0.4)
+                across = rng.uniform(-0.7, 0.7)
+                p = DOCK_BASE + DOCK_DIR * along + np.array([-DOCK_DIR[1], DOCK_DIR[0]]) * across
+                if any(math.hypot(*(p - c)) < r + rad + 0.3 for c, r in taken + SOLIDS):
+                    continue
+                z = DECK_Z + 0.03
+            else:
+                if zone == "beach":
+                    th = rng.uniform(-np.pi, np.pi)
+                    p = shore_point(th, inland=rng.uniform(-0.6, 3.5))
+                elif zone == "palms":
+                    c = palms[rng.integers(len(palms))]
+                    a = rng.uniform(0, 2 * np.pi)
+                    p = c + rng.uniform(0.7, 1.6) * np.array([math.cos(a), math.sin(a)])
+                else:
+                    c = WRECK_POS if zone == "wreck" else centre
+                    a = rng.uniform(0, 2 * np.pi)
+                    p = c + radius * math.sqrt(rng.random()) * np.array([math.cos(a), math.sin(a)])
+                z = prop_spot(p, rad, h_range, taken, wreck_ob)
+                if z is None:
+                    continue
+                if kind in ("shell", "starfish", "crab") and zone not in ("beach", "islet"):
+                    continue
+            taken.append((p, rad))
+            placed.append((kind, zone, (float(p[0]), float(p[1]), float(z)), yaw))
+            got += 1
+        print(f"[props] {zone:7s} {got}/{count}")
+    for i, (kind, zone, loc, yaw) in enumerate(placed):
+        ob = bpy.data.objects.new(f"Prop_{i + 1:03d}_{kind}", meshes[kind])
+        ob.location = loc
+        ob.rotation_euler = (0, 0, yaw)
+        ob["kind"] = "treasure_prop"
+        ob["item"] = kind
+        ob["zone"] = zone
+        ob["index"] = i + 1
+        col.objects.link(ob)
+    return placed, meshes
+
+
+def render_prop_catalog(rig, meshes, path, samples):
+    """Every item type lined up on a sandy board far away from the island, labelled."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return
+    from bpy_extras.object_utils import world_to_camera_view
+    cat = K.get_collection("Prop_Catalog")
+    kinds = sorted(meshes)
+    cols, sp = 7, 1.5
+    rows = math.ceil(len(kinds) / cols)
+    origin = np.array([300.0, -300.0, 0.0])
+    g = Geo()
+    w, h = cols * sp + 1, rows * sp + 1
+    box(g, origin + [(cols - 1) * sp / 2, (rows - 1) * sp / 2, -0.05], (w, h, 0.1), "M_CatalogFloor")
+    emit("Catalog_Board", g, cat)
+    spots = []
+    for i, k in enumerate(kinds):
+        r, c = divmod(i, cols)
+        loc = origin + [c * sp, (rows - 1 - r) * sp, 0]
+        ob = bpy.data.objects.new(f"Catalog_{k}", meshes[k])
+        ob.location = loc
+        ob.rotation_euler = (0, 0, math.radians(-20))
+        cat.objects.link(ob)
+        spots.append((k, loc))
+    centre = origin + [(cols - 1) * sp / 2, (rows - 1) * sp / 2 - 0.4, 0.2]
+    cam = camera(rig, "Cam_Catalog", centre + [0, -11.5, 9.0], centre, lens=36)
+    res = (1600, 1200)
+    render(cam, path, res, samples)
+    scene = bpy.context.scene
+    im = Image.open(path).convert("RGB")
+    d = ImageDraw.Draw(im)
+    try:
+        f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 19)
+    except OSError:
+        f = ImageFont.load_default()
+    for k, loc in spots:
+        v = world_to_camera_view(scene, cam, Vector(loc - [0, 0.55, 0]))
+        x, y = v.x * res[0], (1 - v.y) * res[1]
+        tw = d.textlength(k, font=f)
+        d.rectangle([x - tw / 2 - 5, y - 2, x + tw / 2 + 5, y + 22], fill=(255, 248, 230))
+        d.text((x - tw / 2, y), k, font=f, fill=(60, 40, 20))
+    im.save(path)
+    print("[catalog]", path)
 
 
 # ---------------------------------------------------------------------------
@@ -1079,7 +1565,7 @@ def render(cam, path, res, samples):
 # parchment treasure map (top-down layout drawn like an old pirate chart)
 # ---------------------------------------------------------------------------
 
-def draw_parchment_map(path, spawns, players, palms):
+def draw_parchment_map(path, spawns, players, palms, props=None):
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
@@ -1179,13 +1665,16 @@ def draw_parchment_map(path, spawns, players, palms):
     for p in players:
         x, y = px(p)
         d.ellipse([x - 7, y - 7, x + 7, y + 7], fill=(40, 70, 130), outline=ink)
+    for _, _, p, _ in props or []:
+        x, y = px(p)
+        d.ellipse([x - 5, y - 5, x + 5, y + 5], fill=(214, 160, 40), outline=ink)
     # title cartouche, legend, compass
     title = "Kayıp Korsan Koyu"
     tw = d.textlength(title, font=title_f)
     d.rectangle([S / 2 - tw / 2 - 26, 46, S / 2 + tw / 2 + 26, 124], fill=(236, 218, 170), outline=ink, width=4)
     d.text((S / 2 - tw / 2, 54), title, font=title_f, fill=ink)
     lx, ly = 70, S - 190
-    d.rectangle([lx - 16, ly - 16, lx + 330, ly + 104], fill=(236, 218, 170), outline=ink, width=3)
+    d.rectangle([lx - 16, ly - 16, lx + 380, ly + 104], fill=(236, 218, 170), outline=ink, width=3)
     for s in (1, -1):
         d.line([(lx, ly + 14 - 10 * s), (lx + 20, ly + 14 + 10 * s)], fill=red, width=5)
     d.text((lx + 34, ly + 2), "Hazine noktası (1–8)", font=small_f, fill=ink)
@@ -1193,6 +1682,10 @@ def draw_parchment_map(path, spawns, players, palms):
     d.text((lx + 34, ly + 36), "Oyuncu başlangıcı", font=small_f, fill=ink)
     d.line([(lx, ly + 82), (lx + 22, ly + 82)], fill=(139, 60, 36), width=4)
     d.text((lx + 34, ly + 70), "Patika", font=small_f, fill=ink)
+    if props:
+        d.rectangle([lx - 16, ly + 104, lx + 380, ly + 140], fill=(236, 218, 170), outline=ink, width=3)
+        d.ellipse([lx + 5, ly + 115, lx + 15, ly + 125], fill=(214, 160, 40), outline=ink)
+        d.text((lx + 34, ly + 108), f"Hazine olabilecek eşya ({len(props)})", font=small_f, fill=ink)
     ccx, ccy, R = S - 150, S - 160, 70
     d.ellipse([ccx - R, ccy - R, ccx + R, ccy + R], outline=ink, width=3)
     for k, lab in enumerate(("K", "D", "G", "B")):
@@ -1255,13 +1748,14 @@ def main():
     build_terrain(land_col, 80 if FAST else 132)
     fire = []
     build_temple(mark_col, fire)
-    build_shipwreck(mark_col)
+    wreck = build_shipwreck(mark_col)
     build_dock(mark_col)
     build_arch(mark_col)
     build_camp(mark_col, fire)
     build_x_mark(mark_col, TREASURE_SPAWNS[5][1])
     palms, _, _ = build_vegetation(veg_col)
     spawns, players = build_spawns(game_col)
+    props, item_meshes = build_treasure_props(K.get_collection("TreasureProps", world_col), palms, wreck)
     for label, p in spawns:
         print(f"[spawn] {label:36s} ({p[0]:6.1f}, {p[1]:6.1f}, {p[2]:5.2f})")
 
@@ -1272,12 +1766,15 @@ def main():
     near = camera(rig, "Cam_Temple", (9, -10, TEMPLE_Z + 5.5), (0, 5, TEMPLE_Z + 1.4), lens=28)
 
     draw_parchment_map(os.path.join(RENDER_DIR, "treasure_map.png"), [p for _, p in spawns], players, palms)
+    draw_parchment_map(os.path.join(RENDER_DIR, "treasure_props_map.png"), [p for _, p in spawns], players, palms,
+                       props=props)
     if not NO_RENDER:
         s = 12 if FAST else 64
         res_w = (960, 540) if FAST else (1920, 1080)
         render(hero, os.path.join(RENDER_DIR, "cove_hero.png"), res_w, s)
         render(near, os.path.join(RENDER_DIR, "cove_temple.png"), res_w, s)
         render(top, os.path.join(RENDER_DIR, "cove_top.png"), (800, 800) if FAST else (1600, 1600), s)
+        render_prop_catalog(rig, item_meshes, os.path.join(RENDER_DIR, "props_catalog.png"), s)
     scene.camera = hero
 
     setup_viewport()

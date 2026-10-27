@@ -5,7 +5,7 @@ Knight Killer) yapısı ve stiliyle yeniden tasarlanmış hali. Katanalarla ayn�
 setini (`../mystic_katana/build_mystic_katana.py`) kullanır; her şey
 `build_void_dagger.py` ile Blender içinde üretilir.
 
-![hero](renders/katana_hero.png)
+![hero](renders/dagger_hero.png)
 
 ## Dosyalar
 
@@ -23,20 +23,22 @@ setini (`../mystic_katana/build_mystic_katana.py`) kullanır; her şey
 
 ## Tasarım
 
-- **Namlu:** referanslardaki gibi ağır, hilal gibi sırt tarafına kıvrılan, dışbükey keskin
-  ağızlı bir namlu; sırtta geriye bakan iki çengel ve bir kırıcı diş, sivri uç. Elle
-  çizilen 2D konturdan kısıtlı Delaunay üçgenlemesiyle üretilir. Kesit, referanslardaki
-  gibi ince düz bir plaka; yalnızca kenardaki dar bileme şeridinde incelir (ortası
-  şişkin değil). Çengeller ve dişler gerçek geometri.
-- **Doku:** obsidyen-mor gövde, açık lila iki tonlu bileme şeridi ve koyu mürekkep
-  çizgisi, namlu boyunca dallanan parlayan mor boşluk çatlakları (oyma + emission).
-- **Kabza:** kalın, kalkan biçimli bir gövde ve her yanda kalın, yuvarlak kenarlı orak
-  kanatlar: namluya doğru kıvrılan büyük bir kanat (keskin ağız tarafında daha büyük)
-  ve sapa doğru inen kısa bir kanca. Gövdenin iki yüzünde parlayan mor taş; ince sap
-  üzerinde mor ipek çapraz sargı, pençeli sivri topuz, kalın mürekkep konturu.
-- **Gölge alevi:** keskin ağız boyunca rastgele aralıklı, asimetrik üç tonlu (koyu mor /
-  mor / lila) el çizimi alev kümeleri; çengellerin ve ucun arkasından kopan alev dilleri.
-  6 çizim üçerli değişir (0,75 sn döngü); çatlaklar ve taş yavaş nabızla parlar.
+Kamish's Wrath'ın yapısı, mevcut mor hançerin renkleriyle.
+
+- **Namlu:** hafif S kıvrımlı koyu bir çekirdek; keskin ağız tarafı düzensiz aralıklı,
+  farklı boyutlarda, uca doğru eğik büyük alev dişlerine bölünür, sırt tarafı sakin ve
+  seyrek küçük dişli; kıvrık sivri uç. Kontur prosedürel olarak üretilir (kendini kesmeyene
+  kadar tohum denenir), kısıtlı Delaunay ile üçgenlenir; kesit düz plaka, yalnızca kenarda
+  dar bileme.
+- **Doku:** mürekkep çizgisiyle çevrili koyu çekirdek, uca doğru mordan lilaya geçen dişler,
+  açık bileme şeridi; omurga boyunca parlayan bir damar ve bazı dişlere uzanan kolları.
+- **Kabza:** pullu, kalkan biçimli bir ejderha kafası ve iki yüzünde parlayan badem göz;
+  kafadan namlunun dişlerini sürdüren kalın, katmanlı alev dilleri (her yanda üçü yukarı,
+  ikisi sapa doğru; keskin ağız tarafında daha büyük). Sap ejderha kuyruğu gibi üst üste
+  binen pullu halkalardan; topuzda aşağı yalayan alev dilleri.
+- **Gölge alevi:** diş uçlarından (hepsinden değil) yukarı kıvrılan üç tonlu el çizimi
+  alevler, uçta küçük bir alev, yükselip sönen kıvılcımlar. 6 çizim üçerli değişir
+  (0,75 sn döngü); damar ve göz yavaş nabızla parlar.
 
 ## Motor notları
 

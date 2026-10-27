@@ -62,7 +62,7 @@ POND = np.array([-4.0, -15.5])
 POND_R = 5.0
 POND_ISLAND = np.array([-3.0, -14.6])
 TEA_HOUSE = np.array([-10.6, -15.8])
-HOUSES = [(np.array([10.0, 2.2]), (0, -1)), (np.array([16.5, 1.8]), (0, -1)), (np.array([13.0, -8.4]), (0, 1))]
+HOUSES = [(np.array([9.3, 2.2]), (0, -1)), (np.array([17.4, 1.8]), (0, -1)), (np.array([13.0, -8.4]), (0, 1))]
 STALLS = [(np.array([7.6, -8.6]), (0, 1)), (np.array([19.6, -7.6]), (0, 1))]
 PADDY_HUT = np.array([22.2, -13.4])
 SHRINE = np.array([-21.6, 6.0])
@@ -79,8 +79,8 @@ PATHS = [
      np.array([STAIR_X, STAIR_Y0 - 0.6])],                                            # main road
     [np.array([3.0, -4.0]), np.array([-1.0, -2.6]), np.array([-8.0, -2.0]), np.array([-12.5, -1.0]),
      np.array([-16.5, 1.5]), SHRINE + [2.2, -0.6]],                                   # bridge, bamboo, shrine
-    [np.array([3.0, -3.6]), np.array([9.0, -3.2]), np.array([16.0, -3.0]), np.array([19.5, 1.5]),
-     np.array([19.2, 7.0]), np.array([18.0, 12.0]), np.array([15.2, 17.0])],           # village street, ramp
+    [np.array([3.0, -3.6]), np.array([9.0, -3.2]), np.array([16.0, -3.0]), np.array([21.2, 0.5]),
+     np.array([20.6, 6.5]), np.array([18.0, 12.0]), np.array([15.2, 17.0])],           # village street, ramp
     [np.array([5.0, -18.0]), np.array([0.0, -21.4]), np.array([-7.0, -21.4]), TEA_HOUSE + [-0.4, -3.0]],
     [np.array([STAIR_X, STAIR_Y1 + 0.8]), PAGODA + [0, -3.4]],
     [np.array([STAIR_X - 1.4, STAIR_Y1 + 1.2]), np.array([0.0, 16.6]), ZEN + [-0.5, -3.0],
@@ -134,7 +134,9 @@ def ground(x, y):
     m = ss(0.9, 1.18, q)
     gap = ss(3.6, 2.2, np.abs(x - GATE[0])) * ss(-34.0, -31.5, y)
     m = m * (1 - gap)
-    h = h + m * (11.0 + 5.0 * fbm(x / 9, y / 9, 3, seed=24) + 1.2 * fbm(x / 2.5, y / 2.5, 2, seed=25))
+    h = h + 0.05 * fbm(x / 0.9, y / 0.9, 2, seed=27) * (1 - m)  # small bumps underfoot
+    h = h + m * (11.0 + 5.0 * fbm(x / 9, y / 9, 3, seed=24) + 1.2 * fbm(x / 2.5, y / 2.5, 2, seed=25)
+                  + 0.45 * fbm(x / 1.0, y / 1.0, 2, seed=30))
     # flat pads under the buildings
     for c, r0, r1, lvl in PADS:
         w = ss(r1, r0, np.hypot(x - c[0], y - c[1]))
@@ -182,7 +184,9 @@ def make_materials():
     fm("M_Indigo", "#2c3f72", rough=0.9)
     fm("M_Gravel", "#e2ddd1", rough=1.0)
     fm("M_Bronze", "#7b6a3c", rough=0.4, metal=0.8)
+    fm("M_LilyPad", "#4f8f3c", rough=0.6)
     fm("M_Sakura", "#f5b3c6", rough=0.9)
+    fm("M_SakuraWhite", "#fde9ef", rough=0.9)
     fm("M_SakuraLight", "#fcd6e1", rough=0.9)
     fm("M_Maple", "#d64a2a", rough=0.9)
     fm("M_MapleLight", "#ec7a32", rough=0.9)
@@ -191,7 +195,6 @@ def make_materials():
     fm("M_Bamboo", "#7fae45", rough=0.6)
     fm("M_BambooDark", "#5b8a33", rough=0.6)
     fm("M_BambooLeaf", "#6aa63c", rough=0.8)
-    fm("M_Bark", "#4e3a30", rough=0.9)
     fm("M_Straw", "#d8bb6a", rough=1.0)
     fm("M_Snow", "#f3f6f8", rough=0.8)
     fm("M_StreamWater", "#62bfd0", rough=0.05, alpha=0.7)
@@ -334,12 +337,20 @@ def build_terrain(col, n, veg):
         w = np.clip(w, 0, 1)[:, None]
         return base * (1 - w) + col_ * w
 
+    var2 = fbm(cx / 1.1, cy / 1.1, 2, seed=28)
+    var3 = fbm(cx / 6.0, cy / 6.0, 2, seed=29)
     rgb = c("#93c96a") * (0.5 + 0.5 * var[:, None]) + c("#6fae4c") * (0.5 - 0.5 * var[:, None])
+    rgb = rgb * (0.93 + 0.09 * var2[:, None])
+    rgb = mix(rgb, c("#5d9c45"), ss(-0.25, -0.55, var3) * 0.75)   # clover hollows
+    rgb = mix(rgb, c("#b7c574"), ss(0.35, 0.6, var3) * 0.6)       # dry, sunny patches
     q = rim_q(cx, cy)
     mtn = ss(0.9, 1.05, q)
     rgb = mix(rgb, c("#5f8f45") * (0.9 + 0.1 * var[:, None]), mtn)
-    rgb = mix(rgb, c("#8d857a"), (nz < 0.8) * 1.0)
-    rgb = mix(rgb, c("#6c665e"), (nz < 0.62) * 1.0)
+    band = np.floor(hc * 1.6 + 0.6 * var2) % 3  # bedding in the cliffs
+    rock_c = np.where((band == 0)[:, None], c("#8d857a"), np.where((band == 1)[:, None], c("#7b746a"), c("#9d968a")))
+    rgb = mix(rgb, rock_c, (nz < 0.8) * 1.0)
+    rgb = mix(rgb, rock_c * 0.8, (nz < 0.62) * 1.0)
+    rgb = mix(rgb, c("#a8a296") * (0.95 + 0.08 * var2[:, None]), (nz > 0.8) * ss(0.88, 0.95, q) * ss(0.3, 0.0, var2))  # scree
     rgb = mix(rgb, c("#f1f3f6"), ss(12.5, 14.0, hc + 0.8 * var))
     # bamboo grove floor, petals under the cherry trees
     rgb = mix(rgb, c("#8a9a4c") * (0.9 + 0.1 * var[:, None]), ss(8.5, 6.0, np.hypot(cx - BAMBOO[0], cy - BAMBOO[1])))
@@ -357,7 +368,9 @@ def build_terrain(col, n, veg):
         inside = (np.abs(cx - cc[0]) < hs[0]) & (np.abs(cy - cc[1]) < hs[1])
         rgb = np.where(inside[:, None], c("#7d6b48"), rgb)
     pdist = path_dist(cx, cy)
-    rgb = mix(rgb, c("#d2c19b") * (0.95 + 0.05 * var[:, None]), ss(1.15, 0.8, pdist + 0.2 * var))
+    path_c = c("#d2c19b") * (0.94 + 0.07 * var2[:, None])
+    path_c = mix(path_c, c("#bfae88"), ss(0.7, 0.25, pdist) * 0.5)
+    rgb = mix(rgb, path_c, ss(1.15, 0.8, pdist + 0.2 * var + 0.1 * var2))
     for cc, r0, _, _ in PADS:
         rgb = mix(rgb, c("#cbb994"), ss(r0 + 0.4, r0 - 0.2, np.hypot(cx - cc[0], cy - cc[1])) * 0.85)
     rgb = np.clip(rgb * (1 + 0.04 * (2 * RNG.random(len(F))[:, None] - 1)), 0, 1)
@@ -368,6 +381,7 @@ def build_terrain(col, n, veg):
     attr = mesh.color_attributes.new("Col", 'BYTE_COLOR', 'CORNER')
     rgba = np.concatenate([np.repeat(rgb, 3, axis=0), np.ones((len(F) * 3, 1))], axis=1)
     attr.data.foreach_set("color_srgb", rgba.astype(np.float32).ravel())
+    mesh.polygons.foreach_set("use_smooth", (nz >= 0.8).tolist())  # soft ground, faceted rock faces
     mesh.update()
     ob = bpy.data.objects.new("Terrain", mesh)
     col.objects.link(ob)
@@ -434,8 +448,10 @@ def build_water(col):
 # building blocks
 # ---------------------------------------------------------------------------
 
-def flared_roof(g, c3, yaw, half_out, half_in, z_eave, z_top, lift=0.35, mat="M_RoofTile", thick=0.16):
-    """Hipped roof whose corners curl up, centred on c3 (x, y) and turned by yaw."""
+def flared_roof(g, c3, yaw, half_out, half_in, z_eave, z_top, lift=0.35, mat="M_RoofTile", thick=0.16,
+                ribs=True):
+    """Hipped roof whose corners curl up, centred on c3 (x, y) and turned by yaw; tile ribs run down
+    each slope, a fascia board runs round the eaves and rafter ends peek out underneath."""
     def ring(h, z, up):
         pts = []
         for sx, sy in ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)):
@@ -451,13 +467,43 @@ def flared_roof(g, c3, yaw, half_out, half_in, z_eave, z_top, lift=0.35, mat="M_
     f += [[8 + i for i in range(8)]]
     f += [[16 + i, 16 + (i + 1) % 8, (i + 1) % 8, i] for i in range(8)]
     f += [[16 + i for i in range(8)][::-1]]
-    g.add(C.xf(v, (c3[0], c3[1], 0), (0, 0, yaw)), f, mat)
-    beam(g, C.xf([[0, 0, z_top]], (c3[0], c3[1], 0))[0], C.xf([[0, 0, z_top + 0.12]], (c3[0], c3[1], 0))[0],
-         half_in * 2, half_in * 2, "M_RoofTileDark")
+    loc = (c3[0], c3[1], 0)
+    rot = (0, 0, yaw)
+    g.add(C.xf(v, loc, rot), f, mat)
+
+    def W(q):
+        return C.xf([q], loc, rot)[0]
+
+    def along(rng_, u):  # point on a side, u in [-1, 1] from one corner through the mid to the other
+        a, m, b = rng_
+        return m + (a - m) * (-u) if u < 0 else m + (b - m) * u
+
+    for side in range(4):
+        o = (outer[2 * side], outer[2 * side + 1], outer[(2 * side + 2) % 8])
+        i_ = (inner[2 * side], inner[2 * side + 1], inner[(2 * side + 2) % 8])
+        n = max(int(2 * half_out / 0.27), 4)
+        for k in range(n + 1):
+            u = -0.92 + 1.84 * k / n
+            po, pi_ = along(o, u), along(i_, u * half_in / half_out * 1.0)
+            if ribs:
+                beam(g, W(pi_ + [0, 0, 0.04]), W(po + [0, 0, 0.045]), 0.07, 0.05, "M_RoofTileDark")
+            if k % 2 == 0:  # rafter ends
+                dirn = po - np.array([0, 0, po[2]])
+                dirn = dirn / (np.linalg.norm(dirn[:2]) + 1e-6) * 0.35
+                q = po - [0, 0, thick + 0.04]
+                beam(g, W(q - dirn), W(q - dirn * 0.1), 0.07, 0.07, "M_WoodDark")
+        for a_, b_ in ((o[0], o[1]), (o[1], o[2])):  # fascia
+            beam(g, W(a_ - [0, 0, thick * 0.5]), W(b_ - [0, 0, thick * 0.5]), 0.06, thick + 0.04, "M_WoodDark")
+    top0, top1 = W([0, 0, z_top]), W([0, 0, z_top + 0.12])
+    beam(g, top0, top1, half_in * 2, half_in * 2, "M_RoofTileDark")
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):  # hip ridges
+        beam(g, W([sx * half_in, sy * half_in, z_top + 0.05]), W([sx * half_out, sy * half_out, z_eave + lift + 0.06]),
+             0.13, 0.1, "M_RoofTileDark")
 
 
 def gable_roof(g, s, cx, cy, hw, hd, z_eave, z_ridge, mat="M_RoofTile", oh=0.55, end_mat="M_Plaster"):
-    """Gabled roof over a local rectangle, ridge along local x."""
+    """Gabled roof over a local rectangle, ridge along local x, with tile ribs, barge boards and
+    onigawara end tiles on the ridge."""
     slope = (z_ridge - z_eave) / hd
     ze = z_eave - slope * oh
     for sy in (-1, 1):
@@ -465,11 +511,23 @@ def gable_roof(g, s, cx, cy, hw, hd, z_eave, z_ridge, mat="M_RoofTile", oh=0.55,
             v = [s.w3(cx - hw - oh, cy, z_ridge + dz), s.w3(cx + hw + oh, cy, z_ridge + dz),
                  s.w3(cx + hw + oh, cy + sy * (hd + oh), ze + dz), s.w3(cx - hw - oh, cy + sy * (hd + oh), ze + dz)]
             g.add(v, [[0, 1, 2, 3]], m)
-    beam(g, s.w3(cx - hw - oh - 0.1, cy, z_ridge + 0.08), s.w3(cx + hw + oh + 0.1, cy, z_ridge + 0.08), 0.3, 0.22,
+        for x in np.arange(-hw - oh + 0.14, hw + oh - 0.1, 0.27):
+            beam(g, s.w3(cx + x, cy + sy * 0.05, z_ridge + 0.04), s.w3(cx + x, cy + sy * (hd + oh), ze + 0.04),
+                 0.08, 0.06, "M_RoofTileDark")
+        beam(g, s.w3(cx - hw - oh, cy + sy * (hd + oh), ze - 0.05), s.w3(cx + hw + oh, cy + sy * (hd + oh), ze - 0.05),
+             0.08, 0.16, "M_WoodDark")
+        for sx in (-1, 1):  # barge boards along the gable edges
+            beam(g, s.w3(cx + sx * (hw + oh), cy, z_ridge - 0.02), s.w3(cx + sx * (hw + oh), cy + sy * (hd + oh), ze - 0.02),
+                 0.08, 0.2, "M_WoodDark")
+    beam(g, s.w3(cx - hw - oh - 0.1, cy, z_ridge + 0.1), s.w3(cx + hw + oh + 0.1, cy, z_ridge + 0.1), 0.3, 0.24,
          "M_RoofTileDark")
     for sx in (-1, 1):
+        box(g, s.w3(cx + sx * (hw + oh + 0.12), cy, z_ridge + 0.25), (0.14, 0.42, 0.42), "M_RoofTileDark",
+            rot=(0, 0, s.yaw))
         g.add([s.w3(cx + sx * hw, cy - hd, z_eave), s.w3(cx + sx * hw, cy + hd, z_eave),
                s.w3(cx + sx * hw, cy, z_ridge)], [[0, 1, 2]], end_mat)
+        beam(g, s.w3(cx + sx * hw, cy - hd, z_eave + 0.05), s.w3(cx + sx * hw, cy + hd, z_eave + 0.05), 0.1, 0.1,
+             "M_WoodDark")
 
 
 def torii(g, base, yaw, width=3.4, height=3.6, z=None):
@@ -481,31 +539,43 @@ def torii(g, base, yaw, width=3.4, height=3.6, z=None):
         q = base + d * t
         return np.array([q[0], q[1], z + h])
 
-    for s in (-1, 1):
-        tube(g, p(s * width / 2, -0.5), p(s * width / 2 * 0.97, height), 0.17, 0.15, "M_Vermilion", n=8)
-        tube(g, p(s * width / 2, -0.05), p(s * width / 2, 0.35), 0.22, mat="M_BlackLacquer", n=8)
-        SOLIDS.append(((base + d * s * width / 2), 0.3))
+    for s_ in (-1, 1):
+        tube(g, p(s_ * width / 2, -0.5), p(s_ * width / 2 * 0.97, height), 0.17, 0.15, "M_Vermilion", n=12)
+        SOLIDS.append(((base + d * s_ * width / 2), 0.3))
+        kam = Geo()
+        lathe(kam, [(0.24, -0.05), (0.24, 0.32), (0.19, 0.4)], "M_BlackLacquer", n=12)
+        g.merge(kam, loc=p(s_ * width / 2, 0))
+        for zz in (height * 0.78 - 0.18, height * 0.78 + 0.18):  # wedges at the nuki joint
+            box(g, p(s_ * (width / 2 + 0.22), zz), (0.1, 0.22, 0.1), "M_Vermilion", rot=(0, 0, yaw))
     beam(g, p(-width / 2 - 0.5, height * 0.78), p(width / 2 + 0.5, height * 0.78), 0.18, 0.22, "M_Vermilion")
     beam(g, p(-width / 2 - 0.7, height + 0.05), p(width / 2 + 0.7, height + 0.05), 0.3, 0.2, "M_Vermilion")
-    for s in (-1, 1):
-        beam(g, p(0, height + 0.25), p(s * (width / 2 + 1.05), height + 0.42), 0.36, 0.18, "M_BlackLacquer")
+    n = 10
+    ext = width / 2 + 1.1
+    pts = [p(t, height + 0.27 + 0.22 * abs(t / ext) ** 2.6) for t in np.linspace(-ext, ext, n + 1)]
+    for a_, b_ in zip(pts[:-1], pts[1:]):  # kasagi with upswept ends
+        beam(g, a_, b_, 0.36, 0.2, "M_BlackLacquer")
     beam(g, p(0, height * 0.78), p(0, height), 0.16, 0.16, "M_Vermilion")
+    box(g, p(0, height * 0.89), (0.42, 0.08, 0.36), "M_BlackLacquer", rot=(0, 0, yaw))  # name plaque
+    box(g, p(0, height * 0.89) + [*(np.array([-d[1], d[0]]) * 0.045), 0], (0.3, 0.02, 0.24), "M_Gold",
+        rot=(0, 0, yaw), bevel=False)
 
 
 def stone_lantern(g, base3, scale=1.0, yaw=0.0):
+    """Kasuga-style toro: hexagonal base, shaft, platform, lit firebox, upturned roof, hoju."""
     b = np.asarray(base3, float)
-    s = scale
-    box(g, b + [0, 0, 0.08 * s], (0.55 * s, 0.55 * s, 0.16 * s), "M_StoneDark", rot=(0, 0, yaw))
-    tube(g, b + [0, 0, 0.16 * s], b + [0, 0, 0.85 * s], 0.11 * s, 0.09 * s, "M_Stone", n=6)
-    box(g, b + [0, 0, 0.9 * s], (0.5 * s, 0.5 * s, 0.1 * s), "M_StoneDark", rot=(0, 0, yaw))
-    box(g, b + [0, 0, 1.11 * s], (0.34 * s, 0.34 * s, 0.32 * s), "M_Shoji", rot=(0, 0, yaw))
+    k = scale
+    t = Geo()
+    lathe(t, [(0.34, 0), (0.34, 0.1), (0.24, 0.18), (0.2, 0.2)], "M_StoneDark", n=6)
+    lathe(t, [(0.1, 0.2), (0.09, 0.75), (0.12, 0.78), (0.12, 0.82), (0.09, 0.85)], "M_Stone", n=12)
+    lathe(t, [(0.18, 0.85), (0.31, 0.92), (0.31, 0.98)], "M_StoneDark", n=6, cap_bottom=False)
+    box(t, (0, 0, 1.15), (0.26, 0.26, 0.32), "M_Shoji", bevel=False)
     for sx in (-1, 1):
         for sy in (-1, 1):
-            box(g, b + C.xf([[sx * 0.16 * s, sy * 0.16 * s, 1.11 * s]], rot=(0, 0, yaw))[0],
-                (0.07 * s, 0.07 * s, 0.32 * s), "M_Stone", rot=(0, 0, yaw))
-    tube(g, b + [0, 0, 1.27 * s], b + [0, 0, 1.55 * s], 0.42 * s, 0.05 * s, "M_StoneDark", n=4,
-         phase=math.pi / 4 + yaw)
-    ball(g, b + [0, 0, 1.6 * s], 0.07 * s, "M_StoneDark")
+            box(t, (sx * 0.14, sy * 0.14, 1.15), (0.07, 0.07, 0.34), "M_Stone")
+    lathe(t, [(0.26, 1.31), (0.44, 1.33), (0.47, 1.37), (0.3, 1.47), (0.1, 1.56)], "M_StoneDark", n=6,
+          groove=0.0)
+    lathe(t, [(0.05, 1.56), (0.08, 1.6), (0.09, 1.66), (0.06, 1.71), (0.0, 1.76)], "M_Stone", n=10)
+    g.merge(t, loc=b, rot=(0, 0, yaw + math.pi / 6), scale=k)
 
 
 def solid_rect(s, cx, cy, hx, hy, r=0.7):
@@ -559,12 +629,53 @@ def build_pagoda(col, lights):
             ball(g, (c[0], c[1] + hz - 0.6, z + 0.95), 0.18, "M_Gold")
         else:
             box(g, (c[0], c[1], z + h / 2), (sz, sz, h), "M_Plaster")
+            box(g, (c[0], c[1], z + 0.05), (sz + 0.75, sz + 0.75, 0.1), "M_WoodDark")  # balcony deck
+            rh = hz + 0.33
+            for k in range(4):  # balcony railing
+                a0 = np.array([[-rh, -rh], [rh, -rh], [rh, rh], [-rh, rh]][k])
+                a1 = np.array([[-rh, -rh], [rh, -rh], [rh, rh], [-rh, rh]][(k + 1) % 4])
+                for u in np.linspace(0, 1, max(int(2 * rh / 0.45), 2), endpoint=False):
+                    q = a0 + (a1 - a0) * u
+                    tube(g, (c[0] + q[0], c[1] + q[1], z + 0.1), (c[0] + q[0], c[1] + q[1], z + 0.55), 0.03,
+                         mat="M_Vermilion", n=6)
+                beam(g, (c[0] + a0[0], c[1] + a0[1], z + 0.55), (c[0] + a1[0], c[1] + a1[1], z + 0.55), 0.06, 0.06,
+                     "M_Vermilion")
+                beam(g, (c[0] + a0[0], c[1] + a0[1], z + 0.32), (c[0] + a1[0], c[1] + a1[1], z + 0.32), 0.03, 0.03,
+                     "M_Vermilion")
+            for k in range(4):  # door panels with gold studs on each face
+                a = k * math.pi / 2
+                n_ = np.array([math.cos(a), math.sin(a)])
+                q = c + n_ * (hz + 0.01)
+                box(g, (q[0], q[1], z + h * 0.48), (0.08, 0.75, 0.85), "M_WoodDark", rot=(0, 0, a))
+                for zz in (z + h * 0.48 - 0.25, z + h * 0.48 + 0.25):
+                    for u in (-0.2, 0.2):
+                        t_ = np.array([-n_[1], n_[0]]) * u
+                        ball(g, (q[0] + n_[0] * 0.05 + t_[0], q[1] + n_[1] * 0.05 + t_[1], zz), 0.025, "M_Gold")
         for sx in (-1, 1):
             for sy in (-1, 1):
                 tube(g, (c[0] + sx * hz, c[1] + sy * hz, z), (c[0] + sx * hz, c[1] + sy * hz, z + h), 0.13,
-                     mat="M_Vermilion", n=6)
+                     mat="M_Vermilion", n=10)
         box(g, (c[0], c[1], z + h - 0.1), (sz + 0.1, sz + 0.1, 0.2), "M_Vermilion")
+        for k in range(4):  # bracket sets (tokyo) carrying the eaves
+            a = k * math.pi / 2
+            n_ = np.array([math.cos(a), math.sin(a)])
+            t_ = np.array([-n_[1], n_[0]])
+            for u in (-0.62, 0.0, 0.62):
+                q0 = c + n_ * (hz + 0.12) + t_ * u * hz
+                q1 = c + n_ * (hz + 0.34) + t_ * u * hz
+                box(g, (q0[0], q0[1], z + h - 0.2), (0.22, 0.2, 0.16), "M_WoodDark", rot=(0, 0, a))
+                box(g, (q1[0], q1[1], z + h - 0.06), (0.5, 0.18, 0.12), "M_WoodDark", rot=(0, 0, a))
+                box(g, (q1[0], q1[1], z + h + 0.03), (0.26, 0.42, 0.08), "M_Vermilion", rot=(0, 0, a))
         flared_roof(g, c, 0.0, hz + 0.95, hz * 0.62, z + h, z + h + 0.55, lift=0.38)
+        for sx in (-1, 1):  # wind bells hanging from the upturned corners
+            for sy in (-1, 1):
+                q = c + np.array([sx, sy]) * (hz + 0.85)
+                zt = z + h + 0.3
+                tube(g, (q[0], q[1], zt), (q[0], q[1], zt - 0.3), 0.01, mat="M_Iron", n=4)
+                bell = Geo()
+                lathe(bell, [(0.09, 0.0), (0.08, 0.06), (0.05, 0.14), (0.0, 0.16)], "M_Bronze", n=10,
+                      cap_bottom=False)
+                g.merge(bell, loc=(q[0], q[1], zt - 0.46))
         z += h + 0.5
     tube(g, (c[0], c[1], z), (c[0], c[1], z + 2.4), 0.07, mat="M_Bronze", n=6)
     for k in range(6):
@@ -692,7 +803,7 @@ def build_pond_details(col):
     for k in range(4):
         a = 2 * np.pi * k / 4 + 0.5
         p = POND_ISLAND + 1.0 * np.array([math.cos(a), math.sin(a)])
-        rock(g, (p[0], p[1], gz(p)), (0.4, 0.35, 0.3), "M_Rock", seed=600 + k, yaw=a)
+        C.boulder(g, (p[0], p[1], gz(p)), (0.4, 0.35, 0.3), seed=600 + k, yaw=a, moss=0.4)
     for k, y in enumerate(np.linspace(-20.0, -16.2, 6)):  # stepping stones
         x = -2.7 - 0.25 * math.sin(k * 1.3)
         tube(g, (x, y, -1.2), (x, y, POND_Z + 0.14), 0.36, 0.33, "M_StoneDark", n=7, phase=k)
@@ -756,6 +867,39 @@ def build_house(col, c, front, idx):
     for sx in (-1, 1):
         for sy in (-1, 1):
             box(g, s.w3(sx * hx, sy * hy, zf + H / 2), (0.24, 0.24, H), "M_WoodDark", rot=(0, 0, s.yaw))
+    # timber frame over the plaster: studs, a rail above the doors and a top plate
+    for (ax_, ay_), (bx_, by_), out in (((-hx, -hy), (hx, -hy), (0, -1)), ((-hx, hy), (hx, hy), (0, 1)),
+                                         ((-hx, -hy), (-hx, hy), (-1, 0)), ((hx, -hy), (hx, hy), (1, 0))):
+        a_, b_ = np.array([ax_, ay_]), np.array([bx_, by_])
+        o = np.array(out) * 0.12
+        for zz in (zf + 2.0, zf + H - 0.06):
+            beam(g, s.w3(*(a_ + o), zz), s.w3(*(b_ + o), zz), 0.06, 0.12, "M_WoodDark")
+        L = np.linalg.norm(b_ - a_)
+        for t_ in np.arange(1.0, L - 0.5, 1.0):
+            q = a_ + (b_ - a_) / L * t_ + o
+            along = q[0] if out[1] else q[1]
+            if out == (0, -1) and (-0.8 < along < 0.8 or 1.5 < along < 2.7):
+                continue
+            box(g, s.w3(q[0], q[1], zf + 2.0 + (H - 2.0) / 2), (0.1, 0.06, H - 2.0), "M_WoodDark",
+                rot=(0, 0, s.yaw + (0 if out[1] else math.pi / 2)))
+    for lx in (-0.75, 0.75):  # door frame
+        box(g, s.w3(lx, -hy - 0.11, zf + 1.02), (0.1, 0.1, 2.05), "M_WoodDark", rot=(0, 0, s.yaw))
+    box(g, s.w3(0, -hy - 0.12, zf + 2.1), (1.7, 0.12, 0.12), "M_WoodDark", rot=(0, 0, s.yaw))
+    box(g, s.w3(2.1, -hy - 0.16, zf + 2.15), (1.3, 0.04, 0.32), "M_Straw", rot=(0, 0, s.yaw))  # bamboo blind
+    for z_ in np.arange(zf + 2.0, zf + 2.3, 0.06):
+        beam(g, s.w3(1.45, -hy - 0.19, z_), s.w3(2.75, -hy - 0.19, z_), 0.01, 0.01, "M_WoodDark")
+    box(g, s.w3(0, -hy - 0.24, zf + 2.42), (1.1, 0.06, 0.32), "M_BlackLacquer", rot=(0, 0, s.yaw))  # sign
+    box(g, s.w3(0, -hy - 0.28, zf + 2.42), (0.85, 0.02, 0.18), "M_Gold", rot=(0, 0, s.yaw), bevel=False)
+    pot = Geo()
+    lathe(pot, [(0.14, 0), (0.2, 0.25), (0.22, 0.32)], "M_Indigo", n=12)
+    g.merge(pot, loc=s.w3(-1.3, -hy - 0.45, zf - 0.3))
+    rock(g, s.w3(-1.3, -hy - 0.45, zf + 0.25), (0.28, 0.28, 0.3), "M_BushLight", seed=idx * 11 + 3, rough=0.12,
+         sink=0.3, subdiv=2)
+    for k in range(9):  # firewood stacked against the side wall
+        lx_, lz_ = (k % 3) * 0.16, (k // 3) * 0.15
+        tube(g, s.w3(hx + 0.32, -1.2 + lx_ * 2.4, zf - 0.22 + lz_), s.w3(hx + 0.32, -0.4 + lx_ * 2.4, zf - 0.22 + lz_),
+             0.07, mat="M_Wood", n=7)
+    SOLIDS.append((s.w(hx + 0.35, -0.6), 0.6))
     gable_roof(g, s, 0, 0, hx, hy, zf + H, zf + H + 1.25)
     for k, lx in enumerate((-0.45, 0.0, 0.45)):  # noren over the door
         box(g, s.w3(lx, -hy - 0.14, zf + 1.75), (0.42, 0.03, 0.6), "M_Indigo", rot=(0, 0, s.yaw))
@@ -819,8 +963,13 @@ def build_bell_tower(col):
              "M_Vermilion")
     beam(g, (c[0], c[1] - 1.4, zt + 2.75), (c[0], c[1] + 1.4, zt + 2.75), 0.2, 0.2, "M_WoodDark")
     flared_roof(g, c, 0.0, 2.3, 0.7, zt + 3.0, zt + 4.1, lift=0.4)
-    lathe(g, [(0.62, zt + 0.95), (0.6, zt + 1.05), (0.5, zt + 1.6), (0.46, zt + 2.3), (0.3, zt + 2.5),
-              (0.0, zt + 2.55)], "M_Bronze", n=12, cap_bottom=False)
+    bell = Geo()
+    lathe(bell, [(0.62, 0.95), (0.6, 1.05), (0.5, 1.6), (0.46, 2.3), (0.3, 2.5), (0.0, 2.55)], "M_Bronze", n=16,
+          cap_bottom=False)
+    for zz in (1.25, 1.9, 2.15):  # cast bands
+        r_ = float(np.interp(zz, [0.95, 1.05, 1.6, 2.3, 2.5], [0.62, 0.6, 0.5, 0.46, 0.3])) + 0.012
+        lathe(bell, [(r_, zz - 0.02), (r_, zz + 0.02)], "M_Bronze", n=16, cap_top=False, cap_bottom=False)
+    g.merge(bell, loc=(c[0], c[1], zt))
     tube(g, (c[0], c[1], zt + 2.5), (c[0], c[1], zt + 2.75), 0.06, mat="M_Bronze", n=6)
     beam(g, (c[0] + 0.75, c[1] - 1.1, zt + 1.55), (c[0] + 0.75, c[1] + 1.1, zt + 1.55), 0.22, 0.22, "M_Wood")
     for y in (-0.7, 0.7):
@@ -846,7 +995,8 @@ def build_zen_garden(col):
     for y in np.arange(-hy + 0.25, hy - 0.1, 0.3):  # raked lines
         beam(g, s.w3(-hx + 0.15, y, z0 + 0.11), s.w3(hx - 0.15, y, z0 + 0.11), 0.05, 0.03, "M_White")
     for k, (lx, ly, r) in enumerate(rocks):
-        rock(g, s.w3(lx, ly, z0 + 0.1), (r * 1.3, r, r * 1.1), "M_RockDark", seed=700 + k, yaw=k, sink=0.3)
+        C.boulder(g, s.w3(lx, ly, z0 + 0.1), (r * 1.3, r, r * 1.1), seed=700 + k, yaw=k, sink=0.3, subdiv=3,
+                  mats=("M_RockDark", "M_Rock", "M_RockDark"))
         for rr in (r * 1.6, r * 2.0):
             ring = Geo()
             C.ring_path(ring, rr, 0.03, "M_White", n=18, m=3, z=z0 + 0.11)
@@ -865,7 +1015,7 @@ def build_spring(col):
         p = SPRING + 2.45 * np.array([math.cos(a), math.sin(a)])
         if float(stream_dist(np.array([p[0]]), np.array([p[1]]))[0]) < 1.3 and p[1] < SPRING[1]:
             continue
-        rock(g, (p[0], p[1], gz(p)), (0.55, 0.45, 0.4), "M_Rock" if k % 2 else "M_RockDark", seed=800 + k, yaw=a)
+        C.boulder(g, (p[0], p[1], gz(p)), (0.55, 0.45, 0.4), seed=800 + k, yaw=a, moss=0.5)
         SOLIDS.append((p, 0.55))
     # bamboo spout feeding the pool
     p = SPRING + [-1.0, 2.6]
@@ -885,7 +1035,7 @@ def build_waterfall_spot(col, pts, wz, j):
     for k, s_ in enumerate((-1, 1)):
         for t in range(3):
             p = base + side * s_ * (1.9 + 0.5 * t) - tang * (0.8 + 0.9 * t)
-            rock(g, (p[0], p[1], gz(p)), (0.8, 0.7, 0.9 + 0.3 * t), "M_Rock", seed=900 + k * 5 + t, yaw=t)
+            C.boulder(g, (p[0], p[1], gz(p)), (0.8, 0.7, 0.9 + 0.3 * t), seed=900 + k * 5 + t, yaw=t, moss=0.6, subdiv=3)
             SOLIDS.append((p, 0.8))
     p = base + side * 2.4 + tang * 0.6
     spawn_slot("Foot of the waterfall", p, gz(p))
@@ -913,7 +1063,7 @@ def build_shrine(col):
     box(g, s.w3(0, -0.04, z0 + 0.9), (0.6, 0.04, 0.6), "M_BlackLacquer", rot=(0, 0, s.yaw))
     gable_roof(g, s, 0, -0.5, 0.5, 0.45, z0 + 1.35, z0 + 1.85, oh=0.3, end_mat="M_Wood")
     for k in range(3):
-        rock(g, s.w3(-1.0 + k, -2.2, z0 + 0.3), (1.2, 1.0, 1.5), "M_RockDark", seed=950 + k, yaw=k)
+        C.boulder(g, s.w3(-1.0 + k, -2.2, z0 + 0.3), (1.2, 1.0, 1.5), seed=950 + k, yaw=k, moss=0.5, subdiv=3)
     torii(g, s.w(0, 2.0), s.yaw, width=1.9, height=2.3)
     for sx in (-1, 1):
         fox(g, s.w3(sx * 1.0, 0.8, z0), s.yaw + math.pi / 2 + sx * 0.25)
@@ -997,55 +1147,102 @@ def build_bamboo_clearing(col):
 # vegetation
 # ---------------------------------------------------------------------------
 
-def blossom_tree_geo(seed, mats=("M_Sakura", "M_SakuraLight"), scale=1.0):
+def blossom_tree_geo(seed, mats=("M_Sakura", "M_SakuraLight", "M_SakuraWhite"), scale=1.0):
+    """Gnarled trunk that forks twice; the crown is many small blossom clumps round the branch tips."""
     rng = np.random.default_rng(seed)
     g = Geo()
     lean = rng.uniform(0, 2 * np.pi)
     ld = np.array([math.cos(lean), math.sin(lean), 0])
-    top = ld * 0.4 + [0, 0, 1.9]
-    tube(g, (0, 0, -0.2), top, 0.24, 0.17, "M_Bark", n=7)
+    n = 10
+    a = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    rings = []
+    for i, t in enumerate(np.linspace(0, 1, 7)):
+        c = ld * 0.45 * t * t + [0.06 * math.sin(4 * t + seed), 0.06 * math.cos(3 * t), -0.25 + 2.05 * t]
+        r = 0.2 + 0.1 * max(0.0, 0.25 - t) / 0.25
+        bumps = 1 + 0.12 * np.sin(a * 3 + i + seed)
+        rings.append(c + (r * (1 - 0.25 * t) * bumps)[:, None] * np.stack([np.cos(a), np.sin(a), np.zeros(n)], 1))
+    loft(g, rings, "M_Bark")
+    top = ld * 0.45 + [0, 0, 1.8]
     tips = []
     for k in range(3):
-        a = lean + 2 * np.pi * k / 3 + rng.uniform(-0.4, 0.4)
-        tip = top + [1.3 * math.cos(a), 1.3 * math.sin(a), rng.uniform(0.9, 1.5)]
-        tube(g, top, tip, 0.14, 0.06, "M_Bark", n=6)
-        tips.append(tip)
-    for k in range(7):
-        c = tips[k % 3] + rng.uniform(-0.6, 0.6, 3) * [1, 1, 0.5] + [0, 0, 0.3]
-        ball(g, c, rng.uniform(0.85, 1.25), mats[k % 2], squash=(1, 1, 0.72))
-    ball(g, top + [0, 0, 1.9], 1.2, mats[0], squash=(1, 1, 0.7))
+        a1 = lean + 2 * np.pi * k / 3 + rng.uniform(-0.4, 0.4)
+        mid = top + [0.85 * math.cos(a1), 0.85 * math.sin(a1), rng.uniform(0.6, 0.9)]
+        tube(g, top, mid, 0.15, 0.1, "M_Bark", n=7)
+        for j in range(2):
+            a2 = a1 + rng.uniform(-0.8, 0.8)
+            tip = mid + [0.75 * math.cos(a2), 0.75 * math.sin(a2), rng.uniform(0.3, 0.8)]
+            tube(g, mid, tip, 0.09, 0.04, "M_Bark", n=6)
+            for _ in range(2):  # twigs
+                tw = tip + rng.uniform(-0.45, 0.45, 3) * [1, 1, 0.5] + [0, 0, 0.2]
+                tube(g, tip, tw, 0.035, 0.012, "M_Bark", n=4)
+            tips.append(tip)
+    for k, tip in enumerate(tips):
+        for j in range(4):
+            c = tip + rng.uniform(-0.55, 0.55, 3) * [1, 1, 0.6] + [0, 0, 0.25]
+            rr = rng.uniform(0.42, 0.66)
+            rock(g, c, (rr, rr, rr * 0.78), mats[(k + j) % len(mats)], seed=seed * 31 + k * 4 + j, rough=0.07,
+                 sink=0.0, subdiv=1)
+    for j in range(5):  # a few clumps closing the crown at the top
+        c = top + [rng.uniform(-0.8, 0.8), rng.uniform(-0.8, 0.8), 1.6 + rng.uniform(0, 0.5)]
+        rr = rng.uniform(0.55, 0.75)
+        rock(g, c, (rr, rr, rr * 0.75), mats[j % len(mats)], seed=seed * 37 + j, rough=0.07, sink=0.0, subdiv=1)
     if scale != 1.0:
         g.v = (np.array(g.v) * scale).tolist()
     return g
 
 
 def pine_geo(seed, scale=1.0):
+    """Layered pine: ragged star-shaped tiers drooping at their tips, over a visible trunk."""
     rng = np.random.default_rng(seed)
     g = Geo()
-    h = rng.uniform(3.0, 4.2)
-    tube(g, (0, 0, -0.3), (0, 0, h * 0.4), 0.18, 0.13, "M_Bark", n=6)
-    for k in range(3):
-        z0 = h * (0.3 + 0.24 * k)
-        r = 1.35 - 0.35 * k
-        tube(g, (0, 0, z0), (0, 0, z0 + 1.5 - 0.15 * k), r, 0.0, "M_Pine" if k % 2 else "M_PineLight", n=7,
-             phase=rng.uniform(0, 1))
+    h = rng.uniform(3.4, 4.6)
+    tube(g, (0, 0, -0.3), (0, 0, h * 0.85), 0.2, 0.06, "M_Bark", n=8)
+    tiers = 5
+    n = 18
+    a = np.linspace(0, 2 * np.pi, n, endpoint=False) + rng.uniform(0, 1)
+    for k in range(tiers):
+        z0 = h * (0.22 + 0.15 * k)
+        r = 1.45 * (1 - 0.17 * k)
+        rr = r * np.where(np.arange(n) % 2 == 0, 1.0, 0.68) * rng.uniform(0.9, 1.1, n)
+        droop = np.where(np.arange(n) % 2 == 0, 0.32, 0.12)
+        rim = np.stack([rr * np.cos(a), rr * np.sin(a), z0 - droop], axis=1)
+        apex = np.array([[0, 0, z0 + 0.95 - 0.08 * k]])
+        under = np.array([[0, 0, z0 + 0.12]])
+        v = np.concatenate([rim, apex, under])
+        f = [[i, (i + 1) % n, n] for i in range(n)] + [[(i + 1) % n, i, n + 1] for i in range(n)]
+        g.add(v, f, "M_Pine" if k % 2 else "M_PineLight")
     g.v = (np.array(g.v) * scale).tolist()
     return g
 
 
 def bamboo_geo(seed):
+    """Segmented culm with node rings; twigs near the top carry drooping leaf blades."""
     rng = np.random.default_rng(seed)
     g = Geo()
     h = rng.uniform(5.0, 7.5)
     lean = rng.uniform(0, 2 * np.pi)
     d = np.array([math.cos(lean), math.sin(lean), 0]) * rng.uniform(0.1, 0.5)
-    pts = [d * (t * t) + [0, 0, h * t - 0.2] for t in np.linspace(0, 1, 4)]
-    for k in range(3):
-        tube(g, pts[k], pts[k + 1], 0.075, 0.065, "M_Bamboo" if seed % 3 else "M_BambooDark", n=5)
-        tube(g, pts[k + 1] - [0, 0, 0.04], pts[k + 1] + [0, 0, 0.04], 0.085, mat="M_BambooDark", n=5)
-    for k in range(3):
-        c = pts[2] + (pts[3] - pts[2]) * rng.uniform(0.2, 1.0) + [*rng.uniform(-0.35, 0.35, 2), 0]
-        ball(g, c, rng.uniform(0.45, 0.7), "M_BambooLeaf", subdiv=0, squash=(1, 1, 0.45))
+    segs = 7
+    pts = [d * (t * t) + [0, 0, h * t - 0.2] for t in np.linspace(0, 1, segs + 1)]
+    mat = "M_Bamboo" if seed % 3 else "M_BambooDark"
+    for k in range(segs):
+        tube(g, pts[k], pts[k + 1], 0.075 - 0.004 * k, 0.07 - 0.004 * k, mat, n=7)
+        tube(g, pts[k + 1] - [0, 0, 0.03], pts[k + 1] + [0, 0, 0.03], 0.083 - 0.004 * k, mat="M_BambooDark", n=7)
+    for k in range(segs - 3, segs + 1):
+        for _ in range(2):
+            a = rng.uniform(0, 2 * np.pi)
+            dv = np.array([math.cos(a), math.sin(a), 0.35])
+            base = pts[k]
+            twig = base + dv * rng.uniform(0.4, 0.8)
+            tube(g, base, twig, 0.015, 0.008, "M_BambooDark", n=3)
+            for j in range(5):
+                b_ = rng.uniform(0, 2 * np.pi)
+                ld = np.array([math.cos(b_), math.sin(b_), 0])
+                L = rng.uniform(0.3, 0.45)
+                tip = twig + ld * L - [0, 0, L * 0.45]
+                side = np.array([-ld[1], ld[0], 0]) * 0.045
+                mid = twig + ld * L * 0.45 - [0, 0, L * 0.1]
+                g.add([twig, mid + side, tip, mid - side], [[0, 1, 2, 3]], "M_BambooLeaf" if j % 2 else "M_PineLight")
     return g
 
 
@@ -1066,7 +1263,7 @@ def build_vegetation(col, veg):
     emit("Pines", g, col)
     g = Geo()
     for k, p in enumerate(veg["bush"]):
-        b = C.bush_geo(1400 + k)
+        b = C.bush_geo(1400 + k, "M_FlowerWhite" if k % 3 == 0 else None)
         if k % 3 == 0:
             remap(b, {"M_Bush": "M_Sakura", "M_BushLight": "M_SakuraLight"})  # azaleas
         g.merge(b, loc=(p[0], p[1], gz(p)), rot=(0, 0, RNG.uniform(0, 6.3)), scale=RNG.uniform(0.8, 1.2))
@@ -1075,7 +1272,7 @@ def build_vegetation(col, veg):
     g = Geo()
     for k, p in enumerate(veg["rock"]):
         s = RNG.uniform(0.35, 0.95)
-        rock(g, (p[0], p[1], gz(p)), (s * RNG.uniform(1.0, 1.5), s, s * 0.7), "M_Rock" if k % 3 else "M_RockDark",
+        C.boulder(g, (p[0], p[1], gz(p)), (s * RNG.uniform(1.0, 1.5), s, s * 0.7), moss=0.35,
              seed=1500 + k, yaw=RNG.uniform(0, 6.3))
         SOLIDS.append((p, s * 1.2))
     emit("Rocks", g, col)
@@ -1372,6 +1569,150 @@ def build_props(col, players):
     return placed, meshes
 
 
+def build_ground_cover(col):
+    rng = np.random.default_rng(4242)
+    sol = np.array([c for c, _ in SOLIDS])
+    rad = np.array([r for _, r in SOLIDS])
+
+    def clear(p, path_gap=0.9, qmax=0.93):
+        if float(rim_q(*p)) > qmax or wet(p, 0.3) or stair_zone(p, 0.2):
+            return None
+        if any(math.hypot(*(p - c)) < r0 for c, r0, _, _ in PADS):
+            return None
+        if np.any(np.hypot(sol[:, 0] - p[0], sol[:, 1] - p[1]) < rad * 0.75):
+            return None
+        if float(path_dist(np.array([p[0]]), np.array([p[1]]))[0]) < path_gap:
+            return None
+        e = 0.5
+        if math.hypot(gz(p + [e, 0]) - gz(p - [e, 0]), gz(p + [0, e]) - gz(p - [0, e])) / (2 * e) > 0.55:
+            return None
+        return gz(p)
+
+    def anywhere():
+        return rng.uniform([-27, -30], [27, 28])
+
+    def petals(r):
+        g = Geo()
+        for _ in range(6):
+            q = np.array([*r.uniform(-0.3, 0.3, 2), 0.03])
+            a = r.uniform(0, 2 * np.pi)
+            dv = np.array([math.cos(a), math.sin(a), 0]) * 0.035
+            sv = np.array([-dv[1], dv[0], 0]) * 0.6
+            g.add([q - dv, q + sv, q + dv, q - sv], [[0, 1, 2, 3]], "M_SakuraLight" if r.random() < 0.5 else "M_Sakura")
+        return g
+
+    def litter(r):
+        g = Geo()
+        for _ in range(5):
+            q = np.array([*r.uniform(-0.35, 0.35, 2), 0.03])
+            a = r.uniform(0, 2 * np.pi)
+            dv = np.array([math.cos(a), math.sin(a), 0]) * 0.09
+            sv = np.array([-dv[1], dv[0], 0]) * 0.2
+            g.add([q - dv, q + sv, q + dv, q - sv], [[0, 1, 2, 3]], "M_Straw" if r.random() < 0.6 else "M_BambooLeaf")
+        return g
+
+    sak = veg["sakura"] if (veg := PLAN.get("veg")) else []
+    n = 1 if FAST else 3
+    C.scatter_cover(col, "Grass", 900 * n, anywhere, clear,
+                    lambda r: C.grass_tuft_geo(r, ("M_Grass", "M_GrassLight"), h=0.32), rng)
+    C.scatter_cover(col, "Flowers", 130 * n, anywhere, clear,
+                    lambda r: C.flower_geo(r, ("M_FlowerPink", "M_FlowerWhite", "M_FlowerYellow", "M_FlowerBlue")
+                                           [int(r.integers(4))]), rng)
+    C.scatter_cover(col, "Fallen_Petals", 160 * n, lambda: sak[int(rng.integers(len(sak)))] +
+                    rng.uniform(-3.2, 3.2, 2), lambda p: clear(p, 0.0), petals, rng)
+    C.scatter_cover(col, "Leaf_Litter", 110 * n, near(BAMBOO, 8.0), lambda p: clear(p, 0.3), litter, rng)
+    # water's edge: reeds round the pond and along the lower stream, lily pads on the pond
+    def edge(p):
+        if float(rim_q(*p)) > 0.9 or stair_zone(p, 0.3):
+            return None
+        sd = float(stream_dist(np.array([p[0]]), np.array([p[1]]))[0])
+        pd_ = math.hypot(*(p - POND))
+        if not (1.35 < sd < 1.9 or POND_R - 0.1 < pd_ < POND_R + 0.7):
+            return None
+        if math.hypot(*(p - TEA_HOUSE)) < 3.2 or p[1] < -19.5 and abs(p[0] + 2.7) < 1.2:
+            return None
+        if np.any(np.hypot(sol[:, 0] - p[0], sol[:, 1] - p[1]) < rad * 0.8):
+            return None
+        return gz(p)
+
+    def edge_sample():
+        if rng.random() < 0.5:
+            a = rng.uniform(0, 2 * np.pi)
+            return POND + rng.uniform(POND_R - 0.1, POND_R + 0.7) * np.array([math.cos(a), math.sin(a)])
+        q = spts[int(rng.integers(len(spts)))]
+        a = rng.uniform(0, 2 * np.pi)
+        return q + 1.6 * np.array([math.cos(a), math.sin(a)])
+
+    def lily(r):
+        g = Geo()
+        for k in range(int(r.integers(2, 5))):
+            q = r.uniform(-0.5, 0.5, 2)
+            rr = r.uniform(0.16, 0.3)
+            a0 = r.uniform(0, 2 * np.pi)
+            ring = [[q[0] + rr * math.cos(a0 + t), q[1] + rr * math.sin(a0 + t), 0.01]
+                    for t in np.linspace(0.35, 2 * np.pi, 12)]
+            g.add([[q[0], q[1], 0.012]] + ring, [[0, i + 1, i + 2] for i in range(11)], "M_LilyPad")
+            if k == 0 and r.random() < 0.5:
+                for m in range(7):
+                    b = 2 * np.pi * m / 7
+                    d_ = np.array([math.cos(b), math.sin(b), 0])
+                    sv = np.array([-d_[1], d_[0], 0]) * 0.03
+                    c0 = np.array([q[0], q[1], 0.02])
+                    g.add([c0 + sv, c0 + d_ * 0.09 + [0, 0, 0.07], c0 - sv], [[0, 1, 2]], "M_FlowerPink")
+                ball(g, (q[0], q[1], 0.05), 0.025, "M_FlowerCentre", subdiv=0)
+        return g
+
+    def pond_surface(p):
+        if math.hypot(*(p - POND)) > POND_R - 0.6 or math.hypot(*(p - POND_ISLAND)) < 1.7:
+            return None
+        if abs(p[0] + 2.7) < 0.9 and p[1] < -15.8 or math.hypot(*(p - TEA_HOUSE)) < 3.0:
+            return None
+        return POND_Z + 0.02
+
+    spts = resample(STREAM[3:], 0.5)
+    C.scatter_cover(col, "Reeds", 30 * n, edge_sample, edge, lambda r: C.reeds_geo(r), rng)
+    C.scatter_cover(col, "Lily_Pads", 9 * n, near(POND, POND_R), pond_surface, lily, rng)
+    C.scatter_cover(col, "Ferns", 40 * n, lambda: near(BAMBOO, 8.0)() if rng.random() < 0.5 else anywhere(),
+                    lambda p: clear(p, 0.5) if (math.hypot(*(p - BAMBOO)) < 8.5 or float(rim_q(*p)) > 0.8) else None,
+                    lambda r: C.fern_geo(r), rng)
+    C.scatter_cover(col, "Tall_Grass", 50 * n, anywhere, lambda p: clear(p, 1.3),
+                    lambda r: C.grass_tuft_geo(r, ("M_Grass", "M_GrassLight"), h=0.7, blades=20), rng)
+
+    def outcrop(r):
+        g = Geo()
+        for k in range(int(r.integers(1, 4))):
+            sz = r.uniform(0.6, 1.6)
+            C.boulder(g, (r.uniform(-1, 1), r.uniform(-1, 1), sz * 0.15), (sz * 1.5, sz, sz * 0.8),
+                      seed=int(r.integers(1 << 30)), yaw=r.uniform(0, 6.3), subdiv=2, moss=0.2, tilt=0.3)
+        return g
+
+    C.scatter_cover(col, "Mountain_Outcrops", 18 * n, lambda: rng.uniform(-40, 40, 2),
+                    lambda p: gz(p) if 0.93 < float(rim_q(*p)) < 1.3 and not (abs(p[0] - GATE[0]) < 5 and p[1] < -25)
+                    else None, outcrop, rng)
+
+    def road_slab():  # stepping slabs set into the main road
+        pl = PATHS[0]
+        i = int(rng.integers(len(pl) - 1))
+        a_, b_ = np.asarray(pl[i], float), np.asarray(pl[i + 1], float)
+        return a_ + (b_ - a_) * rng.random() + rng.uniform(-0.45, 0.45, 2)
+
+    def slab(r):
+        g = Geo()
+        sz = r.uniform(0.35, 0.55)
+        C.boulder(g, (0, 0, -0.02), (sz, sz * r.uniform(0.7, 1.0), 0.07), seed=int(r.integers(1 << 30)),
+                  subdiv=1, strata=0, sink=0.5, tilt=0.02, mats=("M_Stone", "M_StoneDark", "M_StoneLight"))
+        return g
+
+    C.scatter_cover(col, "Road_Slabs", 40 * n, road_slab,
+                    lambda p: None if wet(p, 0.1) or stair_zone(p) else gz(p), slab, rng, tries_per=3)
+    spts = resample(STREAM, 0.5)
+    C.scatter_cover(col, "Stream_Pebbles", 90 * n, lambda: spts[int(rng.integers(len(spts)))] +
+                    rng.uniform(-2.4, 2.4, 2), lambda p: clear(p, 0.3, 0.95), lambda r: C.pebbles_geo(r), rng)
+
+
+PLAN = {}
+
+
 def build_spawns(col):
     chest = remap(C.chest_geo(False), LACQUER)
     out = []
@@ -1622,8 +1963,9 @@ def main():
     rig = K.get_collection("Preview_Rig")
 
     veg = plan_vegetation()
+    PLAN["veg"] = veg
     print("[veg]", {k: len(v) for k, v in veg.items()})
-    build_terrain(land_col, 96 if FAST else 160, veg)
+    build_terrain(land_col, 110 if FAST else 230, veg)
     _, spts, swz, fall = build_water(land_col)
     build_waterfall_spot(mark_col, spts, swz, fall)
     build_pagoda(mark_col, [])
@@ -1647,6 +1989,7 @@ def main():
     for label, p in spawns:
         print(f"[spawn] {label:28s} ({p[0]:6.1f}, {p[1]:6.1f}, {p[2]:5.2f})")
     props, meshes = build_props(prop_col, players)
+    build_ground_cover(veg_col)
 
     lamps = [np.array([c[0] + sx * 2.5, y, gz((c[0] + sx * 2.5, y)) + 1.1])
              for c in (np.array([STAIR_X, 0]),) for sx in (-1, 1) for y in (6.2,)]

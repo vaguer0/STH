@@ -134,9 +134,10 @@ def _ground_raw(x, y):
     inland = ss(0.06, 0.32, shore)
     h = h + inland * (5.6 * gauss(x, y, TEMPLE, 7.5) + 3.2 * gauss(x, y, ARCH, 4.5)
                       + 0.5 * fbm(x / 8, y / 8, 3, seed=2))
-    h = h + 0.10 * fbm(x / 2.2, y / 2.2, 2, seed=3) * ss(-0.05, 0.05, shore)
+    h = h + (0.10 * fbm(x / 2.2, y / 2.2, 2, seed=3) + 0.05 * fbm(x / 0.9, y / 0.9, 2, seed=13)) * ss(-0.05, 0.05, shore)
     # the islet and the sandbar that leads to it (knee-deep at -0.45 m)
-    h = np.maximum(h, -0.3 + 1.5 * np.exp(-((x - ISLET[0]) ** 2 + (y - ISLET[1]) ** 2) / (2 * 2.4 ** 2)))
+    e = np.exp(-((x - ISLET[0]) ** 2 + (y - ISLET[1]) ** 2) / (2 * 2.4 ** 2))
+    h = np.maximum(h, -3.5 + 4.7 * e ** 0.35)  # falls away to the deep sea floor all round
     h = np.maximum(h, -0.45 - 0.08 * seg_dist(x, y, *SANDBAR) ** 2)
     return h
 
@@ -252,6 +253,14 @@ class Geo:
         self.m.extend([mat] * len(faces))
         return self
 
+    def add_multi(self, verts, faces, mats):
+        """Like add(), with one material per face."""
+        base = len(self.v)
+        self.v.extend(np.asarray(verts, float).tolist())
+        self.f.extend([[i + base for i in f] for f in faces])
+        self.m.extend(mats)
+        return self
+
     def merge(self, other, loc=(0, 0, 0), rot=(0, 0, 0), scale=1.0):
         v = xf(other.v, loc, rot, scale)
         base = len(self.v)
@@ -267,11 +276,67 @@ def xf(verts, loc=(0, 0, 0), rot=(0, 0, 0), scale=1.0):
     return v @ M.T + np.asarray(loc, float)
 
 
-def box(g, center, size, mat, rot=(0, 0, 0)):
-    sx, sy, sz = np.asarray(size, float) / 2
-    v = np.array([[x, y, z] for z in (-sz, sz) for y in (-sy, sy) for x in (-sx, sx)])
-    f = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]]
-    return g.add(xf(v, center, rot), f, mat)
+_BEVEL_TOPO = []
+
+
+def _bevel_corners(h, b):
+    """24 verts: for each corner (x fastest), its point on the x, y and z face."""
+    v = []
+    for ci in range(8):
+        sgn = np.array([(ci & 1) * 2 - 1, ((ci >> 1) & 1) * 2 - 1, ((ci >> 2) & 1) * 2 - 1], float)
+        base = sgn * (h - b)
+        for a in range(3):
+            q = base.copy()
+            q[a] = sgn[a] * h[a]
+            v.append(q)
+    return np.array(v)
+
+
+def _bevel_topology():
+    """Faces of a chamfered box: 6 faces, 12 edge strips, 8 corner triangles, wound outwards."""
+    if _BEVEL_TOPO:
+        return _BEVEL_TOPO
+
+    def corner(sg):
+        return (sg[0] > 0) + 2 * (sg[1] > 0) + 4 * (sg[2] > 0)
+
+    faces = []
+    ring = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+    for a in range(3):
+        b_, c_ = [x for x in range(3) if x != a]
+        for sa in (-1, 1):
+            f = []
+            for sb, sc in ring:
+                sg = [0, 0, 0]
+                sg[a], sg[b_], sg[c_] = sa, sb, sc
+                f.append(3 * corner(sg) + a)
+            faces.append(f)
+        for sb in (-1, 1):
+            for sc in (-1, 1):
+                sg1, sg2 = [0, 0, 0], [0, 0, 0]
+                sg1[a], sg1[b_], sg1[c_] = -1, sb, sc
+                sg2[a], sg2[b_], sg2[c_] = 1, sb, sc
+                c1, c2 = corner(sg1), corner(sg2)
+                faces.append([3 * c1 + b_, 3 * c2 + b_, 3 * c2 + c_, 3 * c1 + c_])
+    faces += [[3 * ci, 3 * ci + 1, 3 * ci + 2] for ci in range(8)]
+    v = _bevel_corners(np.array([1.0, 1.3, 1.6]), 0.2)
+    for f in faces:
+        pts = v[f]
+        n = np.cross(pts[1] - pts[0], pts[2] - pts[0])
+        _BEVEL_TOPO.append(f if n @ pts.mean(axis=0) > 0 else f[::-1])
+    return _BEVEL_TOPO
+
+
+def box(g, center, size, mat, rot=(0, 0, 0), bevel=True):
+    """Box with lightly chamfered edges (plain when it is too thin to show a bevel)."""
+    h = np.asarray(size, float) / 2
+    b = min(0.03, 0.16 * float(h.min()) * 2)
+    if not bevel or b < 0.006:
+        sx, sy, sz = h
+        v = np.array([[x, y, z] for z in (-sz, sz) for y in (-sy, sy) for x in (-sx, sx)])
+        f = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]]
+        return g.add(xf(v, center, rot), f, mat)
+    return g.add(xf(_bevel_corners(h, b), center, rot), _bevel_topology(), mat)
 
 
 def _frame(axis):
@@ -348,6 +413,40 @@ def rock(g, center, size, mat="M_Rock", seed=0, yaw=0.0, subdiv=1, rough=0.22, s
     p = v * k[:, None] * np.asarray(size, float)
     p[:, 2] = np.maximum(p[:, 2], -size[2] * (1 - sink))
     return g.add(xf(p, center, (0, 0, yaw)), f, mat)
+
+
+def noise3(p, seed=0):
+    """Cheap 3D fbm from three 2D slices, in about [-1, 1]."""
+    p = np.asarray(p, float)
+    return (fbm(p[:, 0] + seed, p[:, 1], 3, seed=seed) + fbm(p[:, 1], p[:, 2] - seed, 3, seed=seed + 1) +
+            fbm(p[:, 2], p[:, 0] + 2 * seed, 3, seed=seed + 2)) / 1.6
+
+
+def boulder(g, center, size, seed=0, yaw=0.0, mats=("M_Rock", "M_RockDark", "M_RockLight"), moss=0.0,
+            subdiv=2, strata=0.35, sink=0.3, tilt=0.15):
+    """A natural rock: lumpy at two scales, faceted into strata, speckled face by face in a few
+    tones, and (with `moss` > 0) green on the faces that look up."""
+    v, f = ico(subdiv)
+    rng = np.random.default_rng(seed)
+    q = v * 1.1 + rng.uniform(-50, 50, 3)
+    k = 1 + 0.28 * noise3(q, seed % 97) + 0.09 * noise3(q * 3.1, seed % 89 + 5)
+    p = v * k[:, None]
+    if strata:  # terrace the height into layers, like bedded stone
+        p[:, 2] = p[:, 2] * (1 - strata) + strata * np.round(p[:, 2] * 3.5) / 3.5
+    p = p * np.asarray(size, float)
+    p[:, 2] = np.maximum(p[:, 2], -size[2] * (1 - sink))
+    rot = (rng.uniform(-tilt, tilt), rng.uniform(-tilt, tilt), yaw)
+    p = xf(p, center, rot)
+    F = np.array(f)
+    P = p[F]
+    nrm = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0])
+    nz = nrm[:, 2] / (np.linalg.norm(nrm, axis=1) + 1e-9)
+    tone = noise3(P.mean(axis=1) * 1.7, seed % 83) + rng.uniform(-0.25, 0.25, len(F))
+    out = [mats[0] if t < 0.05 else (mats[1] if t < 0.45 else mats[min(2, len(mats) - 1)]) for t in tone]
+    if moss > 0:
+        mn = noise3(P.mean(axis=1) * 0.9, seed % 71 + 3)
+        out = ["M_Moss" if (z > 0.55 and m_ > 0.35 - moss) else o for z, m_, o in zip(nz, mn, out)]
+    return g.add_multi(p, f, out)
 
 
 # ---------------------------------------------------------------------------
@@ -447,13 +546,42 @@ def make_materials():
     flat_mat("M_DeadWood", "#6d655c", rough=1.0)
     flat_mat("M_WellWater", "#1e3e4a", rough=0.05)
     flat_mat("M_Dirt", "#8a6a44", rough=1.0)
+    flat_mat("M_PalmTrunkTop", "#6f7d3a", rough=0.9)
+    flat_mat("M_PalmDead", "#a5844b", rough=0.9)
+    flat_mat("M_BushDark", "#3b7330", rough=0.9)
+    flat_mat("M_Grass", "#5f9e3e", rough=0.9)
+    flat_mat("M_GrassLight", "#8cc55a", rough=0.9)
+    flat_mat("M_DuneGrass", "#b4b569", rough=0.9)
+    flat_mat("M_FlowerCentre", "#f5c531", rough=0.8)
+    flat_mat("M_FlowerRed", "#e0353b", rough=0.8)
+    flat_mat("M_FlowerPink", "#f08cb5", rough=0.8)
+    flat_mat("M_FlowerWhite", "#f7f5ee", rough=0.8)
+    flat_mat("M_FlowerYellow", "#f7d23e", rough=0.8)
+    flat_mat("M_FlowerBlue", "#6f86e6", rough=0.8)
+    flat_mat("M_ThatchDark", "#a9853c", rough=1.0)
+    flat_mat("M_Mortar", "#a59a84", rough=1.0)
+    flat_mat("M_StoneLight", "#d6ccb4", rough=0.9)
+    flat_mat("M_Brass", "#c99a3a", rough=0.3, metal=0.9)
+    flat_mat("M_RockLight", "#a39b8d", rough=0.95)
+    flat_mat("M_Bark", "#4e3a30", rough=0.9)
+    flat_mat("M_Fern", "#3f8a3a", rough=0.85)
+    flat_mat("M_FernLight", "#69ad48", rough=0.85)
+    flat_mat("M_Reed", "#6e8f3e", rough=0.9)
+    flat_mat("M_ReedLight", "#a9b766", rough=0.9)
+    flat_mat("M_Cattail", "#6b4426", rough=0.9)
+    flat_mat("M_Seagrass", "#4f8a5a", rough=0.8)
     flat_mat("M_Flame", "#ff7a1f", emit="#ff7a1f", emit_strength=8.0)
     flat_mat("M_FlameCore", "#ffe08a", emit="#ffe08a", emit_strength=12.0)
     for m in MATS.values():
         m.use_backface_culling = False
 
 
+FLAT_MATS = {"M_Rock", "M_RockDark", "M_RockLight", "M_Water", "M_Seabed", "M_Terrain"}
+SMOOTH_ANGLE = math.radians(65)
+
+
 def emit(name, g, col, loc=(0, 0, 0)):
+    """One object from a Geo: curved parts shade smooth, edges sharper than SMOOTH_ANGLE stay crisp."""
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata([tuple(v) for v in g.v], [], g.f)
     used = list(dict.fromkeys(g.m))
@@ -462,6 +590,9 @@ def emit(name, g, col, loc=(0, 0, 0)):
     idx = {m: i for i, m in enumerate(used)}
     mesh.polygons.foreach_set("material_index", [idx[m] for m in g.m])
     mesh.validate()
+    mesh.set_sharp_from_angle(angle=SMOOTH_ANGLE)
+    flat = {i for m, i in idx.items() if m in FLAT_MATS}
+    mesh.polygons.foreach_set("use_smooth", [p.material_index not in flat for p in mesh.polygons])
     mesh.update()
     ob = bpy.data.objects.new(name, mesh)
     ob.location = loc
@@ -512,19 +643,41 @@ def build_terrain(col, n):
     def c(h):
         return hexc(h)[None, :]
 
+    var2 = fbm(cx / 1.1, cy / 1.1, 2, seed=15)
+    var3 = fbm(cx / 7.0, cy / 7.0, 2, seed=16)
+
+    def mix(base, col_, w):
+        w = np.clip(w, 0, 1)[:, None]
+        return base * (1 - w) + col_ * w
+
     deep = ss(-0.2, -3.0, hc)[:, None]
     col_rgb = c("#dcc48c") * (1 - deep) + c("#2a6d86") * deep
+    col_rgb = mix(col_rgb, c("#4f8a7a"), (var2 > 0.35) * ss(-0.4, -1.2, hc) * 0.6)  # weed on the sea floor
     sand_line = 0.95 + 0.25 * var
-    sand = np.where((hc < 0.18)[:, None], c("#d8bd84"), c("#eed79c"))
+    r_ = np.hypot(cx, cy)
+    ripple = 0.5 + 0.5 * np.sin(r_ * 5.0 + 3.0 * var2)
+    sand = c("#eed79c") * (0.96 + 0.05 * ripple[:, None]) * (0.97 + 0.04 * var2[:, None])
+    sand = mix(sand, c("#d4b67c"), ss(0.45, 0.08, hc))                   # wet sand by the water
+    sand = mix(sand, c("#f6f0e2"), ss(0.13, 0.04, hc) * ss(-0.08, 0.0, hc))  # foam line
+    sand = mix(sand, c("#cdb688"), (var2 < -0.45) * 0.6)                  # darker patches
     col_rgb = np.where((hc >= -0.15)[:, None], sand, col_rgb)
     grass = c("#7dba50") * (0.5 + 0.5 * var[:, None]) + c("#5b9c3d") * (0.5 - 0.5 * var[:, None])
+    grass = grass * (0.92 + 0.1 * var2[:, None])
+    grass = mix(grass, c("#a9b860"), ss(0.35, 0.65, var3) * 0.7)          # sun-dried patches
+    grass = mix(grass, c("#4a8a36"), ss(-0.3, -0.6, var3) * 0.7)          # lush hollows
+    grass = mix(grass, c("#c9c08a"), ss(sand_line + 0.25, sand_line, hc))  # sandy fringe
     on_grass = hc >= sand_line
     col_rgb = np.where(on_grass[:, None], grass, col_rgb)
-    col_rgb = np.where((on_grass & (nz < 0.86))[:, None], c("#938a7c"), col_rgb)
-    col_rgb = np.where((on_grass & (nz < 0.74))[:, None], c("#716a60"), col_rgb)
+    band = np.floor(hc * 2.6 + 0.5 * var2) % 3  # bedding in the exposed rock
+    rock_c = np.where((band == 0)[:, None], c("#938a7c"), np.where((band == 1)[:, None], c("#857c70"), c("#a39a8b")))
+    col_rgb = np.where((on_grass & (nz < 0.86))[:, None], rock_c, col_rgb)
+    col_rgb = np.where((on_grass & (nz < 0.74))[:, None], rock_c * 0.8, col_rgb)
+    col_rgb = mix(col_rgb, c("#6b8f4a"), (on_grass & (nz < 0.86) & (nz > 0.78)) * 0.5)  # grass on the ledges
     pd = path_dist(cx, cy)
-    dirt = ss(1.25, 0.85, pd + 0.25 * var) * (hc > 0.25)
-    col_rgb = col_rgb * (1 - dirt[:, None]) + c("#ae8853") * dirt[:, None]
+    dirt = ss(1.25, 0.85, pd + 0.25 * var + 0.15 * var2) * (hc > 0.25)
+    dirt_c = c("#ae8853") * (0.93 + 0.08 * var2[:, None])
+    dirt_c = mix(dirt_c, c("#8c6a40"), ss(0.75, 0.3, pd) * 0.45)  # worn centre of the path
+    col_rgb = col_rgb * (1 - dirt[:, None]) + dirt_c * dirt[:, None]
     # temple courtyard and camp: trodden ground
     yard = (np.maximum(abs(cx - TEMPLE[0]), abs(cy - TEMPLE[1])) < 5.4) | (np.hypot(cx - CAMP[0], cy - CAMP[1]) < 3.4)
     col_rgb = np.where(yard[:, None], c("#b89462") * (0.94 + 0.06 * var[:, None]), col_rgb)
@@ -536,6 +689,7 @@ def build_terrain(col, n):
     attr = mesh.color_attributes.new("Col", 'BYTE_COLOR', 'CORNER')
     rgba = np.concatenate([np.repeat(col_rgb, 3, axis=0), np.ones((len(F) * 3, 1))], axis=1)
     attr.data.foreach_set("color_srgb", rgba.astype(np.float32).ravel())
+    mesh.polygons.foreach_set("use_smooth", (nz >= 0.8).tolist())  # soft ground, faceted rock faces
     mesh.update()
     ob = bpy.data.objects.new("Terrain", mesh)
     col.objects.link(ob)
@@ -557,24 +711,45 @@ def build_terrain(col, n):
 def chest_geo(open_lid=False):
     g = Geo()
     L, W, H = 0.9, 0.56, 0.42
-    box(g, (0, 0, H / 2), (L, W, H), "M_Wood")
-    for x in (-L / 2 + 0.07, L / 2 - 0.07):
-        box(g, (x, 0, H / 2), (0.06, W + 0.03, H + 0.02), "M_Iron")
-    # rounded lid: half cylinder along x
-    n = 7
+    box(g, (0, 0, H / 2), (L - 0.03, W - 0.03, H - 0.01), "M_WoodDark", bevel=False)
+    for k in range(3):  # body planks with a hairline gap between them
+        z = (k + 0.5) * H / 3
+        box(g, (0, 0, z), (L, W, H / 3 - 0.012), "M_Wood")
+    for x in (-L / 2 + 0.09, L / 2 - 0.09):
+        box(g, (x, 0, H / 2), (0.06, W + 0.025, H + 0.01), "M_Iron")
+        for z in np.linspace(0.06, H - 0.06, 4):
+            for sy in (-1, 1):
+                ball(g, (x, sy * (W / 2 + 0.015), z), 0.013, "M_Gold", subdiv=1)
+    for sx in (-1, 1):  # corner brackets
+        for sy in (-1, 1):
+            box(g, (sx * (L / 2 - 0.005), sy * (W / 2 - 0.035), H / 2), (0.025, 0.08, H + 0.01), "M_Iron")
+            box(g, (sx * (L / 2 - 0.035), sy * (W / 2 - 0.005), H / 2), (0.08, 0.025, H + 0.01), "M_Iron")
+        handle = Geo()
+        ring_path(handle, 0.05, 0.01, "M_Iron", n=10, m=4)
+        g.merge(handle, loc=(sx * (L / 2 + 0.02), 0, H * 0.62), rot=(0, math.pi / 2, 0))
+    # rounded lid: half cylinder along x, in planks
+    n = 9
     ang = np.linspace(0, np.pi, n)
     prof = np.stack([np.zeros(n), (W / 2) * np.cos(ang), 0.22 * np.sin(ang)], axis=1)
-    rings = [prof + [x, 0, 0] for x in (-L / 2, L / 2)]
     lid = Geo()
-    loft(lid, rings, "M_WoodDark")
-    for x in (-L / 2 + 0.07, L / 2 - 0.07):
-        band = [prof * [1, 1.04, 1.06] + [xx, 0, 0] for xx in (x - 0.035, x + 0.035)]
-        loft(lid, band, "M_Iron")
+    for j in range(n - 1):
+        seg = prof[j:j + 2]
+        ring_a = np.vstack([seg + [-L / 2, 0, 0], (seg * [1, 0.96, 0.96]) [::-1] + [-L / 2, 0, 0]])
+        loft(lid, [ring_a, ring_a + [L, 0, 0]], "M_WoodDark" if j % 2 else "M_Wood")
+    for x in (-L / 2 + 0.09, L / 2 - 0.09):
+        band = [prof * [1, 1.05, 1.07] + [xx, 0, 0] for xx in (x - 0.03, x + 0.03)]
+        loft(lid, band, "M_Iron", cap_start=False, cap_end=False)
+        for j in range(1, n - 1):
+            ball(lid, prof[j] * [1, 1.08, 1.1] + [x, 0, 0], 0.013, "M_Gold", subdiv=1)
+    for x in (-0.25, 0.25):  # hinges at the back
+        box(lid, (x, W / 2 + 0.01, 0.0), (0.1, 0.03, 0.06), "M_Iron")
     if open_lid:
-        g.merge(lid, loc=(0, W / 2, H), rot=(math.radians(-105), 0, 0), scale=1.0)
+        g.merge(lid, loc=(0, 0, H), rot=(math.radians(-105), 0, 0), scale=1.0)
     else:
         g.merge(lid, loc=(0, 0, H))
-    box(g, (0, -W / 2 - 0.02, H - 0.02), (0.12, 0.05, 0.16), "M_Gold")
+    box(g, (0, -W / 2 - 0.02, H - 0.03), (0.13, 0.04, 0.17), "M_Gold")
+    box(g, (0, -W / 2 - 0.042, H - 0.05), (0.025, 0.01, 0.05), "M_Dark", bevel=False)
+    ball(g, (0, -W / 2 - 0.045, H - 0.02), 0.014, "M_Dark", subdiv=1)
     return g
 
 
@@ -594,66 +769,234 @@ def palm_geo(seed, height):
     ld = np.array([math.cos(lean), math.sin(lean), 0])
     bend = rng.uniform(0.6, 1.6)
     rings = []
-    ts = np.linspace(0, 1, 9)
-    for i, t in enumerate(ts):
-        c = ld * bend * t * t + [0, 0, height * t - 0.2]
-        r = (0.24 + (0.14 - 0.24) * t) * (1.08 if i % 2 else 1.0)
-        a = np.linspace(0, 2 * np.pi, 7, endpoint=False) + 0.3 * i
-        rings.append(c + r * np.stack([np.cos(a), np.sin(a), np.zeros(7)], axis=1))
+    nr, ns = 22, 10
+    a = np.linspace(0, 2 * np.pi, ns, endpoint=False)
+    for i, t in enumerate(np.linspace(0, 1, nr)):
+        c = ld * bend * t * t + [0, 0, height * t - 0.25]
+        r = 0.2 + 0.06 * (1 - t) + 0.12 * max(0.0, 0.12 - t) / 0.12   # flared foot
+        r *= 1.09 if i % 2 else 0.97                                  # leaf-scar rings
+        rings.append(c + r * np.stack([np.cos(a + 0.21 * i), np.sin(a + 0.21 * i), np.zeros(ns)], axis=1))
     loft(g, rings, "M_PalmTrunk")
-    top = ld * bend + [0, 0, height - 0.2]
-    nf = rng.integers(7, 10)
-    for k in range(nf):
-        yaw = 2 * np.pi * k / nf + rng.uniform(-0.25, 0.25)
+    top = ld * bend + [0, 0, height - 0.25]
+    ball(g, top + [0, 0, 0.12], 0.2, "M_PalmTrunkTop", subdiv=2, squash=(1, 1, 1.3))
+    nf = int(rng.integers(10, 13))
+    for k in range(nf + 2):
+        dead = k >= nf
+        yaw = 2 * np.pi * k / nf + rng.uniform(-0.2, 0.2) if not dead else rng.uniform(0, 2 * np.pi)
         d = np.array([math.cos(yaw), math.sin(yaw), 0])
         side = np.array([-d[1], d[0], 0])
-        L = rng.uniform(2.3, 3.0)
-        lift = rng.uniform(0.3, 0.6)
-        st = np.linspace(0, 1, 7)
-        Lv, Cv, Rv = [], [], []
-        for s in st:
-            p = top + d * L * s + [0, 0, L * (lift * s - 0.85 * s * s)]
-            w = 0.55 * math.sin(math.pi * min(s * 1.15, 1.0)) ** 0.6 + 0.02
-            Cv.append(p + [0, 0, 0.05])
-            Lv.append(p + side * w - [0, 0, 0.16 * w])
-            Rv.append(p - side * w - [0, 0, 0.16 * w])
-        n = len(st)
-        v = np.array(Lv + Cv + Rv)
-        f = []
-        for i in range(n - 1):
-            f.append([i, i + 1, n + i + 1, n + i])
-            f.append([n + i, n + i + 1, 2 * n + i + 1, 2 * n + i])
-        g.add(v, f, "M_PalmLeaf" if k % 2 else "M_PalmLeafDark")
-    v, f = ico(1)
-    for k in range(3):
-        a = 2 * np.pi * k / 3 + rng.uniform(0, 1)
-        g.add(v * 0.13 + top + [0.17 * math.cos(a), 0.17 * math.sin(a), -0.18], f, "M_Coconut")
+        L = rng.uniform(2.3, 3.1) * (0.8 if dead else 1.0)
+        lift = rng.uniform(0.25, 0.65) if not dead else -0.6
+        mat = "M_PalmDead" if dead else ("M_PalmLeaf" if k % 2 else "M_PalmLeafDark")
+        st = np.linspace(0, 1, 13)
+        spine = [top + [0, 0, 0.15] + d * L * s_ * (0.85 if dead else 1) +
+                 [0, 0, L * (lift * s_ - (1.4 if dead else 0.85) * s_ * s_)] for s_ in st]
+        for i in range(len(st) - 1):
+            tube(g, spine[i], spine[i + 1], 0.035 * (1 - st[i]) + 0.01, 0.035 * (1 - st[i + 1]) + 0.01,
+                 "M_PalmTrunk" if dead else mat, n=4)
+        for i in range(1, len(st) - 1):
+            p = spine[i]
+            fwd = spine[i + 1] - spine[i - 1]
+            fwd /= np.linalg.norm(fwd)
+            ln = 0.15 + 0.7 * math.sin(math.pi * st[i]) ** 0.6
+            for sd in (-1, 1):
+                droop = 0.35 + 0.25 * st[i] + (0.5 if dead else 0.0)
+                mid = p + side * sd * ln * 0.5 + fwd * ln * 0.22 + [0, 0, -ln * droop * 0.3]
+                tip = p + side * sd * ln + fwd * ln * 0.38 + [0, 0, -ln * droop]
+                w = 0.06
+                v = [p - fwd * w, p + fwd * w, mid + fwd * w * 0.7, mid - fwd * w * 0.7, tip]
+                g.add(v, [[0, 1, 2, 3], [3, 2, 4]], mat)
+    for k in range(int(rng.integers(4, 7))):
+        a_ = 2 * np.pi * k / 5 + rng.uniform(0, 0.6)
+        ball(g, top + [0.2 * math.cos(a_), 0.2 * math.sin(a_), -0.12 - 0.08 * (k % 2)], 0.12, "M_Coconut", subdiv=2)
     return g
 
 
-def bush_geo(seed):
+def bush_geo(seed, flowers=None):
+    """A dark leafy core covered in individual leaves of three greens, a few twigs showing."""
     rng = np.random.default_rng(seed)
     g = Geo()
-    for k in range(rng.integers(3, 5)):
+    lobes = []
+    for k in range(int(rng.integers(5, 8))):
         a = rng.uniform(0, 2 * np.pi)
-        d = rng.uniform(0.1, 0.55)
-        s = rng.uniform(0.45, 0.8)
-        rock(g, (d * math.cos(a), d * math.sin(a), s * 0.45), (s, s, s * 0.75),
-             "M_Bush" if k % 2 else "M_BushLight", seed=seed * 7 + k, rough=0.15, sink=0.5)
+        d = rng.uniform(0.05, 0.55)
+        s = rng.uniform(0.3, 0.5)
+        c = np.array([d * math.cos(a), d * math.sin(a), s * 0.55 + rng.uniform(0, 0.25)])
+        rock(g, c, (s * 0.85, s * 0.85, s * 0.7), "M_BushDark", seed=seed * 7 + k, rough=0.12, sink=0.6, subdiv=1)
+        lobes.append((c, s))
+    for k in range(5):  # twigs at the foot
+        c, s = lobes[k % len(lobes)]
+        tube(g, (c[0] * 0.3, c[1] * 0.3, 0), c * [1.05, 1.05, 0.6], 0.025, 0.012, "M_Bark", n=4)
+    leaf_mats = ("M_Bush", "M_BushLight", "M_BushDark", "M_Bush")
+    for c, s in lobes:
+        for j in range(26):
+            a = rng.uniform(0, 2 * np.pi)
+            e = rng.uniform(-0.2, 1.3)
+            n_ = np.array([math.cos(a) * math.cos(e), math.sin(a) * math.cos(e), math.sin(e)])
+            base = c + n_ * s * rng.uniform(0.75, 0.95)
+            t1 = np.cross(n_, [0, 0, 1.0])
+            t1 = t1 / (np.linalg.norm(t1) + 1e-6)
+            t2 = np.cross(n_, t1)
+            ang = rng.uniform(0, 2 * np.pi)
+            ax = t1 * math.cos(ang) + t2 * math.sin(ang)
+            sd = np.cross(n_, ax)
+            L, W = rng.uniform(0.13, 0.2), rng.uniform(0.05, 0.075)
+            tip = base + ax * L + n_ * 0.05
+            g.add([base, base + ax * L * 0.45 + sd * W + n_ * 0.03, tip, base + ax * L * 0.45 - sd * W + n_ * 0.03],
+                  [[0, 1, 2, 3]], leaf_mats[int(rng.integers(4))])
+    if flowers:
+        for k in range(18):
+            c, s = lobes[k % len(lobes)]
+            a = rng.uniform(0, 2 * np.pi)
+            e = rng.uniform(0.1, 1.2)
+            n_ = np.array([math.cos(a) * math.cos(e), math.sin(a) * math.cos(e), math.sin(e)])
+            p = c + s * 1.0 * n_
+            for m in range(5):  # five petals round a yellow eye
+                b_ = 2 * np.pi * m / 5
+                t1 = np.cross(n_, [0, 0, 1.0])
+                t1 = t1 / (np.linalg.norm(t1) + 1e-6)
+                t2 = np.cross(n_, t1)
+                dv = t1 * math.cos(b_) + t2 * math.sin(b_)
+                sv = np.cross(n_, dv) * 0.025
+                g.add([p + sv, p + dv * 0.08 + n_ * 0.02, p - sv], [[0, 1, 2]], flowers)
+            ball(g, p + n_ * 0.01, 0.018, "M_FlowerCentre", subdiv=0)
     return g
+
+
+# ---------------------------------------------------------------------------
+# ground cover: grass tufts, flowers, pebbles (shared with the other maps)
+# ---------------------------------------------------------------------------
+
+def grass_tuft_geo(rng, mats=("M_Grass", "M_GrassLight"), h=0.35, blades=None):
+    """Curved two-segment blades: dark at the root, light at the tip."""
+    g = Geo()
+    for k in range(blades or int(rng.integers(10, 16))):
+        a = rng.uniform(0, 2 * np.pi)
+        d = np.array([math.cos(a), math.sin(a), 0])
+        base = d * rng.uniform(0, 0.09)
+        hh = h * rng.uniform(0.55, 1.25)
+        lean = rng.uniform(0.15, 0.7)
+        mid = base + d * hh * lean * 0.3 + [0, 0, hh * 0.6]
+        tip = base + d * hh * lean + [0, 0, hh * (1 - 0.25 * lean)]
+        side = np.array([-d[1], d[0], 0]) * rng.uniform(0.016, 0.026)
+        g.add([base - side, base + side, mid + side * 0.7, mid - side * 0.7], [[0, 1, 2, 3]], mats[0])
+        g.add([mid - side * 0.7, mid + side * 0.7, tip], [[0, 1, 2]], mats[-1])
+    return g
+
+
+def flower_geo(rng, petal_mat, centre_mat="M_FlowerCentre", stem_mat="M_Grass"):
+    g = Geo()
+    h = rng.uniform(0.18, 0.32)
+    tube(g, (0, 0, 0), (0.02, 0, h), 0.008, mat=stem_mat, n=3)
+    for k in range(5):
+        a = 2 * np.pi * k / 5
+        d = np.array([math.cos(a), math.sin(a), 0])
+        sd = np.array([-d[1], d[0], 0])
+        c = np.array([0.02, 0, h])
+        g.add([c + sd * 0.018, c + d * 0.06 + [0, 0, 0.012], c - sd * 0.018], [[0, 1, 2]], petal_mat)
+    ball(g, (0.02, 0, h + 0.008), 0.014, centre_mat, subdiv=0)
+    for s_ in (-1, 1):
+        g.add([(0, 0, 0.04), (s_ * 0.07, 0.01, 0.09), (0.0, 0.02, 0.07)], [[0, 1, 2]], stem_mat)
+    return g
+
+
+def pebbles_geo(rng, mats=("M_Rock", "M_RockDark", "M_RockLight")):
+    g = Geo()
+    for k in range(int(rng.integers(3, 7))):
+        s = rng.uniform(0.04, 0.13)
+        boulder(g, (rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25), 0), (s * 1.3, s, s * 0.55),
+                seed=int(rng.integers(1 << 30)), mats=mats, subdiv=1, strata=0, sink=0.5)
+    return g
+
+
+def fern_geo(rng, mats=("M_Fern", "M_FernLight"), size=1.0):
+    """Arching fronds with paired leaflets, from a tight crown."""
+    g = Geo()
+    nf = int(rng.integers(6, 9))
+    for k in range(nf):
+        a = 2 * np.pi * k / nf + rng.uniform(-0.25, 0.25)
+        d = np.array([math.cos(a), math.sin(a), 0])
+        side = np.array([-d[1], d[0], 0])
+        L = rng.uniform(0.55, 0.85) * size
+        pts = [d * L * t + [0, 0, L * (1.2 * t - 1.25 * t * t) + 0.02] for t in np.linspace(0, 1, 9)]
+        mat = mats[k % len(mats)]
+        for i in range(8):
+            tube(g, pts[i], pts[i + 1], 0.008, mat=mat, n=3)
+        for i in range(1, 8):
+            ln = 0.16 * size * math.sin(math.pi * i / 8) + 0.03
+            fwd = (pts[i + 1] - pts[i - 1]) / np.linalg.norm(pts[i + 1] - pts[i - 1])
+            for sd in (-1, 1):
+                tip = pts[i] + side * sd * ln + fwd * ln * 0.4 - [0, 0, ln * 0.25]
+                g.add([pts[i] - fwd * 0.02, pts[i] + fwd * 0.025, tip], [[0, 1, 2]], mat)
+    return g
+
+
+def reeds_geo(rng, size=1.0):
+    """A clump of reeds and a couple of cattail heads."""
+    g = Geo()
+    for k in range(int(rng.integers(9, 15))):
+        a = rng.uniform(0, 2 * np.pi)
+        base = np.array([math.cos(a), math.sin(a), 0]) * rng.uniform(0, 0.18)
+        h = rng.uniform(0.7, 1.4) * size
+        lean = np.array([math.cos(a), math.sin(a), 0]) * rng.uniform(0.05, 0.25) * h
+        mid = base + lean * 0.4 + [0, 0, h * 0.55]
+        tip = base + lean + [0, 0, h]
+        side = np.array([-math.sin(a), math.cos(a), 0]) * 0.02
+        g.add([base - side, base + side, mid + side * 0.7, mid - side * 0.7], [[0, 1, 2, 3]], "M_Reed")
+        g.add([mid - side * 0.7, mid + side * 0.7, tip], [[0, 1, 2]], "M_ReedLight")
+    for k in range(int(rng.integers(1, 4))):
+        a = rng.uniform(0, 2 * np.pi)
+        b = np.array([math.cos(a), math.sin(a), 0]) * 0.08
+        h = rng.uniform(0.9, 1.3) * size
+        tube(g, b, b + [0, 0, h], 0.01, mat="M_Reed", n=3)
+        tube(g, b + [0, 0, h - 0.22], b + [0, 0, h - 0.02], 0.028, mat="M_Cattail", n=6)
+    return g
+
+
+def seagrass_geo(rng):
+    g = Geo()
+    for k in range(int(rng.integers(8, 14))):
+        a = rng.uniform(0, 2 * np.pi)
+        base = np.array([math.cos(a), math.sin(a), 0]) * rng.uniform(0, 0.3)
+        h = rng.uniform(0.3, 0.7)
+        sway = np.array([rng.uniform(-0.15, 0.15), rng.uniform(-0.15, 0.15), 0])
+        side = np.array([-math.sin(a), math.cos(a), 0]) * 0.025
+        mid = base + sway * 0.5 + [0, 0, h * 0.5]
+        tip = base + sway + [0, 0, h]
+        g.add([base - side, base + side, mid + side, mid - side], [[0, 1, 2, 3]], "M_Seagrass")
+        g.add([mid - side, mid + side, tip], [[0, 1, 2]], "M_Seagrass")
+    return g
+
+
+def scatter_cover(col, name, count, sample, ok, make, rng, tries_per=6):
+    """Joins `count` small pieces into one object; `ok(p)` returns the ground z or None."""
+    g = Geo()
+    placed = 0
+    for _ in range(count * tries_per):
+        if placed >= count:
+            break
+        p = sample()
+        z = ok(p)
+        if z is None:
+            continue
+        g.merge(make(rng), loc=(p[0], p[1], z - 0.02), rot=(0, 0, rng.uniform(0, 2 * np.pi)),
+                scale=rng.uniform(0.8, 1.25))
+        placed += 1
+    print(f"[cover] {name} {placed}")
+    return emit(name, g, col) if placed else None
 
 
 def barrel(g, center, seed=0, lying=False):
-    t = np.linspace(0, 1, 6)
-    rings = []
-    for tt in t:
-        r = 0.27 + 0.05 * math.sin(math.pi * tt)
-        a = np.linspace(0, 2 * np.pi, 10, endpoint=False)
-        rings.append(np.stack([r * np.cos(a), r * np.sin(a), np.full(10, 0.85 * tt)], axis=1))
     b = Geo()
-    loft(b, rings, "M_Wood")
-    for z in (0.12, 0.73):
-        tube(b, (0, 0, z), (0, 0, z + 0.05), 0.31, mat="M_Iron", n=10)
+    prof = [(0.27 + 0.05 * math.sin(math.pi * t), 0.85 * t) for t in np.linspace(0, 1, 9)]
+    lathe(b, [(0.0, 0.015)] + prof + [(0.255, 0.85), (0.255, 0.81), (0.0, 0.81)], "M_Wood", n=24, groove=0.018,
+          cap_top=False, cap_bottom=False)
+    for z in (0.07, 0.2, 0.65, 0.78):
+        r = 0.27 + 0.05 * math.sin(math.pi * z / 0.85) + 0.006
+        lathe(b, [(r - 0.004, z - 0.025), (r + 0.004, z - 0.02), (r + 0.004, z + 0.02), (r - 0.004, z + 0.025)],
+              "M_Iron", n=24, cap_top=False, cap_bottom=False)
+    box(b, (0, 0, 0.815), (0.05, 0.36, 0.012), "M_WoodDark", bevel=False)  # lid batten
+    ball(b, (0.12, 0.05, 0.82), 0.025, "M_WoodDark", subdiv=1)              # bung
     rot = (math.radians(90), 0, seed) if lying else (0, 0, seed)
     loc = np.asarray(center) + ([0, 0, 0.29] if lying else [0, 0, 0])
     g.merge(b, loc=loc, rot=rot)
@@ -661,18 +1004,36 @@ def barrel(g, center, seed=0, lying=False):
 
 def crate(g, center, size=0.7, yaw=0.0):
     c = Geo()
-    box(c, (0, 0, size / 2), (size, size, size), "M_WoodLight")
-    for sx in (-1, 1):
+    s = size
+    box(c, (0, 0, s / 2), (s - 0.03, s - 0.03, s - 0.03), "M_WoodDark", bevel=False)
+    n = 4
+    w = s / n
+    for k in range(n):  # planks on the four sides and the lid
+        t = -s / 2 + (k + 0.5) * w
+        for sx in (-1, 1):
+            box(c, (sx * (s / 2 - 0.012), t, s / 2), (0.025, w - 0.012, s - 0.02), "M_WoodLight", bevel=False)
+            box(c, (t, sx * (s / 2 - 0.012), s / 2), (w - 0.012, 0.025, s - 0.02), "M_WoodLight", bevel=False)
+        box(c, (t, 0, s - 0.012), (w - 0.012, s - 0.02, 0.025), "M_WoodLight", bevel=False)
+    e = 0.065
+    for sx in (-1, 1):  # frame battens on every edge
         for sy in (-1, 1):
-            box(c, (sx * size / 2, sy * size / 2, size / 2), (0.08, 0.08, size + 0.01), "M_WoodDark")
-    box(c, (0, 0, size), (size + 0.04, 0.1, 0.04), "M_WoodDark")
+            box(c, (sx * (s / 2 - e / 2 + 0.01), sy * (s / 2 - e / 2 + 0.01), s / 2), (e, e, s + 0.01), "M_Wood")
+        for z in (e / 2, s - e / 2 + 0.01):
+            box(c, (sx * (s / 2 - e / 2 + 0.01), 0, z), (e, s, e), "M_Wood")
+            box(c, (0, sx * (s / 2 - e / 2 + 0.01), z), (s, e, e), "M_Wood")
+    for sy in (-1, 1):  # diagonal brace on two faces
+        beam(c, (-s / 2 + e, sy * (s / 2 + 0.012), e), (s / 2 - e, sy * (s / 2 + 0.012), s - e), 0.022, 0.06, "M_Wood")
     g.merge(c, loc=center, rot=(0, 0, yaw))
 
 
 def torch(g, base, lights):
     base = np.asarray(base, float)
-    tube(g, base - [0, 0, 0.3], base + [0, 0, 1.6], 0.06, 0.05, "M_WoodDark", n=6)
-    tube(g, base + [0, 0, 1.55], base + [0, 0, 1.75], 0.09, 0.16, "M_Iron", n=8)
+    tube(g, base - [0, 0, 0.3], base + [0, 0, 1.6], 0.06, 0.05, "M_WoodDark", n=8)
+    for z in (0.5, 1.1):
+        tube(g, base + [0, 0, z], base + [0, 0, z + 0.06], 0.068, mat="M_Iron", n=8)
+    lathe(g, [(0.05, 1.5), (0.09, 1.55), (0.17, 1.76), (0.15, 1.78)], "M_Iron", n=12, groove=0.06,
+          cap_top=False)
+    lathe(g, [(0.08, 1.62), (0.12, 1.66), (0.12, 1.74), (0.09, 1.78)], "M_Rope", n=10)
     tube(g, base + [0, 0, 1.7], base + [0, 0, 2.15], 0.12, 0.0, "M_Flame", n=6)
     tube(g, base + [0, 0, 1.72], base + [0, 0, 2.0], 0.065, 0.0, "M_FlameCore", n=6)
     lights.append(base + [0, 0, 2.0])
@@ -682,20 +1043,92 @@ def torch(g, base, lights):
 # landmarks
 # ---------------------------------------------------------------------------
 
+STONES = ("M_Stone", "M_StoneDark", "M_StoneLight")
+
+
+def block_course(g, rng, half, z, h, depth=0.5):
+    """One course of dressed blocks round a square of half size `half`."""
+    for side in range(4):
+        t = -half + rng.uniform(0, 0.4)
+        while t < half - 0.05:
+            L = min(rng.uniform(0.55, 1.05), half - t)
+            m = t + L / 2
+            out = half - depth / 2 + rng.uniform(-0.012, 0.012)
+            q = [(m, -out), (out, m), (-m, out), (-out, -m)][side]
+            size = (L - 0.025, depth, h - 0.025) if side % 2 == 0 else (depth, L - 0.025, h - 0.025)
+            box(g, (q[0], q[1], z + h / 2), size, STONES[int(rng.integers(3))])
+            t += L
+
+
+def paving(g, rng, half, inner, z, tile=0.9):
+    """Square paving slabs on the ring between `inner` and `half`."""
+    n = int(math.ceil(2 * half / tile))
+    step = 2 * half / n
+    for i in range(n):
+        for j in range(n):
+            x, y = -half + (i + 0.5) * step, -half + (j + 0.5) * step
+            if max(abs(x), abs(y)) < inner - step / 2:
+                continue
+            box(g, (x, y, z + 0.03 + rng.uniform(-0.01, 0.01)), (step - 0.03, step - 0.03, 0.06),
+                STONES[int(rng.integers(3))])
+
+
+def pillar_geo(h, r, rng, broken=False):
+    """Fluted column with entasis, a moulded base and (if whole) an echinus and abacus."""
+    g = Geo()
+    lathe(g, [(r * 1.42, 0.0), (r * 1.42, 0.08), (r * 1.25, 0.12), (r * 1.18, 0.2), (r * 1.06, 0.24)], "M_Stone",
+          n=24, cap_top=False)
+    n = 24
+    a = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    flute = 1 - 0.07 * (np.arange(n) % 2)
+    rings = []
+    for t in np.linspace(0, 1, 7):
+        rr = r * (1 + 0.04 * math.sin(math.pi * t * 0.8)) * (1 - 0.1 * t) * flute
+        z = 0.24 + h * t
+        zz = np.full(n, z)
+        if broken and t == 1.0:
+            zz = z + rng.uniform(-0.18, 0.12, n)
+        rings.append(np.stack([rr * np.cos(a), rr * np.sin(a), zz], axis=1))
+    loft(g, rings, "M_Stone", cap_start=False)
+    if not broken:
+        z = 0.24 + h
+        lathe(g, [(r * 0.9, z), (r * 1.2, z + 0.1), (r * 1.3, z + 0.16)], "M_StoneLight", n=24, cap_bottom=False)
+        box(g, (0, 0, z + 0.25), (r * 2.8, r * 2.8, 0.18), "M_StoneDark")
+    else:
+        for k in range(3):  # loose chips at the foot
+            q = rng.uniform(-r * 2.5, r * 2.5, 2)
+            box(g, (q[0], q[1], 0.06), (0.16, 0.12, 0.1), "M_Stone", rot=(0.2, 0.3, rng.uniform(0, 3)))
+    return g
+
+
 def build_temple(col, lights):
     g = Geo()
     z0 = -0.3  # object origin sits at TEMPLE_Z
     tiers = [(9.0, 0.75), (7.2, 0.6), (5.6, 0.55)]
     z = z0
+    brng = np.random.default_rng(55)
     for k, (s, h) in enumerate(tiers):
-        box(g, (0, 0, z + h / 2), (s, s, h), "M_Stone" if k % 2 == 0 else "M_StoneDark")
+        box(g, (0, 0, z + h / 2 - 0.03), (s - 0.1, s - 0.1, h - 0.06), "M_Mortar", bevel=False)
+        for c in range(2):
+            block_course(g, brng, s / 2, z + c * h / 2, h / 2)
+        inner = tiers[k + 1][0] / 2 if k + 1 < len(tiers) else 0.0
+        paving(g, brng, s / 2, inner, z + h - 0.06)
         z += h
     top = z
+    for k in range(14):  # moss creeping over the stones
+        a = brng.uniform(0, 2 * np.pi)
+        tier = int(brng.integers(3))
+        hs = tiers[tier][0] / 2
+        zt = z0 + sum(t[1] for t in tiers[:tier + 1])
+        q = np.clip(np.array([math.cos(a), math.sin(a)]) * hs * 1.5, -hs + 0.25, hs - 0.25)
+        rock(g, (q[0], q[1], zt), (brng.uniform(0.3, 0.6), brng.uniform(0.25, 0.45), 0.06), "M_Moss",
+             seed=4000 + k, sink=0.5, rough=0.2)
     # stair run down the south face
     steps = 7
     for k in range(steps):
         zt = top - (k + 0.5) * top / steps
         box(g, (0, -2.8 - k * 0.42, (zt - 1.5) / 2), (2.6, 0.42, zt + 1.5), "M_StoneDark" if k % 2 else "M_Stone")
+        box(g, (0, -2.8 - k * 0.42 - 0.02, zt - 0.015), (2.62, 0.44, 0.06), "M_StoneLight")  # worn tread
     for sx in (-1, 1):
         box(g, (sx * 1.5, -2.8 - 3 * 0.42, (top - 1.5) / 2 - 0.2), (0.4, 7 * 0.42, top + 1.1), "M_StoneDark")
     # pillars; the back row still carries its lintel
@@ -703,25 +1136,49 @@ def build_temple(col, lights):
     for px, py in [(-2.2, 2.2), (0, 2.2), (2.2, 2.2), (-2.2, 0), (2.2, 0), (-2.2, -2.2), (2.2, -2.2)]:
         full = py > 2
         h = 3.0 if full else rng.uniform(0.6, 1.9)
-        box(g, (px, py, top + 0.12), (0.9, 0.9, 0.24), "M_StoneDark")
-        tube(g, (px, py, top + 0.24), (px, py, top + 0.24 + h), 0.33, 0.3 if full else 0.31, "M_Stone", n=8)
-        if full:
-            box(g, (px, py, top + 0.34 + h), (0.86, 0.86, 0.2), "M_StoneDark")
-        else:
-            box(g, (px + 0.05, py, top + 0.24 + h), (0.5, 0.42, 0.18), "M_Stone", rot=(0.3, 0.2, rng.uniform(0, 3)))
-    box(g, (0, 2.2, top + 3.64), (5.4, 0.8, 0.45), "M_Stone")
-    box(g, (0, 2.2, top + 3.9), (5.0, 0.6, 0.12), "M_Moss")
+        box(g, (px, py, top + 0.06), (0.98, 0.98, 0.12), "M_StoneDark")  # plinth
+        g.merge(pillar_geo(h - 0.12, 0.33, rng, broken=not full), loc=(px, py, top + 0.12))
+        if not full:
+            box(g, (px + 0.6, py - 0.3, top + 0.12), (0.5, 0.42, 0.22), "M_Stone", rot=(0.3, 0.2, rng.uniform(0, 3)))
+    for k, x in enumerate(np.arange(-2.7, 2.71, 0.9)):  # lintel in blocks, with a cornice and moss
+        box(g, (x, 2.2, top + 3.64), (0.88, 0.8, 0.45), STONES[k % 3])
+    box(g, (0, 2.2, top + 3.92), (5.6, 0.95, 0.12), "M_StoneLight")
+    for k, x in enumerate(np.arange(-2.6, 2.61, 0.26)):  # dentils under the cornice
+        box(g, (x, 1.83, top + 3.38), (0.12, 0.1, 0.1), "M_StoneDark", bevel=False)
+    rock(g, (-0.6, 2.2, top + 3.98), (1.6, 0.45, 0.08), "M_Moss", seed=4100, sink=0.4, rough=0.25)
+    rock(g, (1.7, 2.3, top + 3.98), (0.8, 0.4, 0.07), "M_Moss", seed=4101, sink=0.4, rough=0.25)
+    vine_rng = np.random.default_rng(77)
+    for k in range(6):  # vines hanging from the lintel
+        x = vine_rng.uniform(-2.6, 2.6)
+        pts = [np.array([x, 1.78, top + 3.4 - 0.25 * i]) + [vine_rng.uniform(-0.05, 0.05), 0, 0]
+               for i in range(int(vine_rng.integers(4, 9)))]
+        for a_, b_ in zip(pts[:-1], pts[1:]):
+            tube(g, a_, b_, 0.015, mat="M_Moss", n=4)
+            g.add([b_, b_ + [0.09, -0.03, 0.03], b_ + [0.02, -0.03, 0.1]], [[0, 1, 2]], "M_BushLight")
     # altar
-    box(g, (0, 0.7, top + 0.4), (1.5, 0.95, 0.8), "M_StoneDark")
+    box(g, (0, 0.7, top + 0.06), (1.85, 1.25, 0.12), "M_Stone")
+    box(g, (0, 0.7, top + 0.45), (1.5, 0.95, 0.7), "M_StoneDark")
+    for x in (-0.45, 0.0, 0.45):  # carved panels on the front
+        box(g, (x, 0.7 - 0.49, top + 0.45), (0.32, 0.04, 0.46), "M_StoneLight")
+        box(g, (x, 0.7 - 0.515, top + 0.45), (0.12, 0.02, 0.2), "M_Gold", bevel=False)
     box(g, (0, 0.7, top + 0.85), (1.75, 1.15, 0.1), "M_Stone")
+    for x in (-0.72, 0.72):
+        bowl = Geo()
+        lathe(bowl, [(0.05, 0.0), (0.12, 0.05), (0.14, 0.12)], "M_Gold", n=12, cap_top=False)
+        g.merge(bowl, loc=(x, 0.7, top + 0.9))
     TREASURE_Z[0] = TEMPLE_Z + top + 0.9
     # fallen pillars and loose blocks behind the temple
     for p0, p1 in [((1.8, 5.4), (4.6, 6.6)), ((5.0, 4.8), (6.4, 2.6)), ((-4.8, 5.2), (-3.0, 6.6))]:
         a = TEMPLE + np.array(p0)
         b = TEMPLE + np.array(p1)
         za, zb = gz(a), gz(b)
-        tube(g, (a[0] - TEMPLE[0], a[1] - TEMPLE[1], za + 0.25 - TEMPLE_Z),
-             (b[0] - TEMPLE[0], b[1] - TEMPLE[1], zb + 0.25 - TEMPLE_Z), 0.32, mat="M_Stone", n=8, phase=0.4)
+        pa = np.array([a[0] - TEMPLE[0], a[1] - TEMPLE[1], za + 0.3 - TEMPLE_Z])
+        pb = np.array([b[0] - TEMPLE[0], b[1] - TEMPLE[1], zb + 0.3 - TEMPLE_Z])
+        dv = pb - pa
+        L = float(np.linalg.norm(dv))
+        seg = pillar_geo(L - 0.24, 0.3, rng, broken=True)
+        pitch = math.atan2(math.hypot(dv[0], dv[1]), dv[2])
+        g.merge(seg, loc=pa - [0, 0, 0.0], rot=(0, pitch, math.atan2(dv[1], dv[0])))
     for k in range(9):
         a = rng.uniform(0, 2 * np.pi)
         d = rng.uniform(5.2, 6.6)
@@ -763,6 +1220,14 @@ def hull_geo(L, W, D, n_len, n_prof, hole=None, mat="M_Wood"):
             a = i * n_prof + j
             f.append([a, a + n_prof, a + n_prof + 1, a + 1])
     g.add(v, f, mat)
+    for j in range(1, n_prof - 1):  # plank strakes along the hull
+        for i in range(n_len - 1):
+            if hole and (hole(i, j) or hole(i, j - 1)):
+                continue
+            a_, b_ = rings[i][j], rings[i + 1][j]
+            na = np.array([0, a_[1], a_[2] - (D * 0.35 * abs(2 * a_[0] / L) ** 2 - D * 0.3)])
+            off = na / (np.linalg.norm(na) + 1e-6) * 0.02
+            beam(g, a_ + off, b_ + off, 0.035, 0.035, "M_WoodDark")
     for j in (0, n_prof - 1):  # gunwales
         for i in range(n_len - 1):
             beam(g, rings[i][j] + [0, 0, 0.05], rings[i + 1][j] + [0, 0, 0.05], 0.12, 0.12, "M_WoodDark")
@@ -815,6 +1280,26 @@ def build_shipwreck(col):
             sf.append([a, a + 1, a + nu + 1, a + nu])
     sail.add(sv, sf, "M_Cloth")
     g.merge(sail)
+    mast_top = np.array([0.9, 0.2, 3.55])
+    for i in (3, 5, 9, 11):  # shrouds down to the gunwales, some snapped
+        for j in (0, npf - 1):
+            end = rings[i][j] + [0, 0, 0.1]
+            if (i + j) % 3 == 0:
+                end = mast_top + (end - mast_top) * 0.55 + [0, 0.15, -0.6]
+            tube(g, mast_top, end, 0.012, mat="M_Rope", n=4)
+    tube(g, (L / 2 - 0.4, 0, 0.55), (L / 2 + 1.7, 0.05, 1.5), 0.09, 0.05, "M_WoodDark", n=8)  # bowsprit
+    tube(g, (L / 2 + 1.6, 0.05, 1.45), mast_top, 0.012, mat="M_Rope", n=4)
+    # stern cabin with windows
+    box(g, (-L / 2 + 1.5, 0, 0.15), (1.7, 2.2, 1.0), "M_Wood")
+    box(g, (-L / 2 + 1.5, 0, 0.7), (1.9, 2.4, 0.1), "M_WoodDark")
+    for y in (-0.6, 0.0, 0.6):
+        box(g, (-L / 2 + 0.64, y, 0.25), (0.04, 0.3, 0.32), "M_Dark", bevel=False)
+        box(g, (-L / 2 + 0.63, y, 0.25), (0.03, 0.36, 0.04), "M_WoodLight", bevel=False)
+    tube(g, (-L / 2 + 1.0, 0, 0.75), (-L / 2 + 0.6, 0, 2.1), 0.05, mat="M_WoodDark", n=6)  # stern lantern pole
+    lathe(g, [(0.06, 2.05), (0.13, 2.12), (0.13, 2.38), (0.05, 2.45)], "M_LanternGlow", n=8)
+    for k in range(10):  # barnacles and weed low on the hull
+        i, j = 2 + (k * 7) % (nl - 4), npf // 2 + (k % 3) - 1
+        ball(g, rings[i][j] + [0, 0, 0.02], 0.06 + 0.02 * (k % 2), "M_Moss" if k % 2 else "M_StoneLight", subdiv=1)
     barrel(g, (-2.2, 0.5, -1.45), seed=0.4)
     crate(g, (2.6, -0.3, -1.3), 0.6, 0.3)
 
@@ -881,16 +1366,20 @@ def build_arch(col):
     for k, s in enumerate((-1, 1)):
         p = ARCH + axis * 2.3 * s
         SOLIDS.append((p, 1.9))
-        rock(g, (p[0], p[1], gz(p) + 1.2), (1.5, 1.7, 2.6), "M_Rock", seed=40 + k, yaw=0.5, sink=0.1)
+        boulder(g, (p[0], p[1], gz(p) + 1.2), (1.5, 1.7, 2.6), seed=40 + k, yaw=0.5, sink=0.1, moss=0.3, subdiv=3)
     lz = gz(ARCH) + 3.6
-    rock(g, (ARCH[0], ARCH[1], lz), (3.9, 1.6, 1.15), "M_RockDark", seed=44, yaw=0.5, subdiv=2, rough=0.12)
-    rock(g, (ARCH[0] + 0.4, ARCH[1] + 0.2, lz + 0.9), (1.8, 1.0, 0.6), "M_Moss", seed=45, yaw=0.6, rough=0.15)
+    boulder(g, (ARCH[0], ARCH[1], lz), (3.9, 1.6, 1.15), seed=44, yaw=0.5, subdiv=3, moss=0.55, tilt=0.03,
+            mats=("M_RockDark", "M_Rock", "M_RockLight"))
+    boulder(g, (ARCH[0] + 0.4, ARCH[1] + 0.2, lz + 0.75), (1.8, 1.0, 0.55), seed=45, yaw=0.6, moss=0.9, tilt=0.05)
+    for k in range(5):  # ferns growing on top of the arch
+        q = np.array([ARCH[0] - 1.6 + 0.8 * k, ARCH[1] + 0.3 * math.sin(k), lz + 1.05])
+        g.merge(fern_geo(np.random.default_rng(470 + k), size=0.8), loc=q, rot=(0, 0, k))
     rng = np.random.default_rng(46)
     for k in range(6):
         a = rng.uniform(0, 2 * np.pi)
         p = ARCH + rng.uniform(3.8, 5.5) * np.array([math.cos(a), math.sin(a)])
         s = rng.uniform(0.5, 1.1)
-        rock(g, (p[0], p[1], gz(p) + s * 0.3), (s * 1.2, s, s * 0.8), "M_Rock", seed=50 + k, yaw=a)
+        boulder(g, (p[0], p[1], gz(p) + s * 0.3), (s * 1.2, s, s * 0.8), seed=50 + k, yaw=a, moss=0.25)
         SOLIDS.append((p, s * 1.3))
     return emit("Rock_Arch", g, col)
 
@@ -901,7 +1390,8 @@ def build_camp(col, lights):
     rng = np.random.default_rng(9)
     for k in range(9):
         a = 2 * np.pi * k / 9
-        rock(g, c + [0.75 * math.cos(a), 0.75 * math.sin(a), 0.05], (0.2, 0.17, 0.14), "M_RockDark", seed=60 + k, yaw=a)
+        boulder(g, c + [0.75 * math.cos(a), 0.75 * math.sin(a), 0.05], (0.2, 0.17, 0.14), seed=60 + k, yaw=a,
+                subdiv=1, mats=("M_RockDark", "M_Dark", "M_RockDark"))
     for k in range(3):
         a = 2 * np.pi * k / 3 + 0.4
         d = np.array([math.cos(a), math.sin(a), 0])
@@ -1003,11 +1493,12 @@ def build_vegetation(col):
     for k, p in enumerate(palms):
         g.merge(palm_geo(100 + k, RNG.uniform(4.2, 6.2)), loc=(p[0], p[1], gz(p)))
     emit("Palms", g, col)
+    PALMS[:] = palms
     taken += palms
     bushes = scatter(26, (1.2, 9.0), 2.0, taken)
     g = Geo()
     for k, p in enumerate(bushes):
-        g.merge(bush_geo(200 + k), loc=(p[0], p[1], gz(p)), rot=(0, 0, RNG.uniform(0, 6.3)),
+        g.merge(bush_geo(200 + k, "M_FlowerRed" if k % 3 == 0 else None), loc=(p[0], p[1], gz(p)), rot=(0, 0, RNG.uniform(0, 6.3)),
                 scale=RNG.uniform(0.9, 1.4))
     emit("Bushes", g, col)
     taken += bushes
@@ -1015,13 +1506,13 @@ def build_vegetation(col):
     g = Geo()
     for k, p in enumerate(rocks):
         s = RNG.uniform(0.35, 1.0)
-        rock(g, (p[0], p[1], gz(p)), (s * RNG.uniform(1.0, 1.6), s, s * 0.7), "M_Rock" if k % 3 else "M_RockDark",
+        boulder(g, (p[0], p[1], gz(p)), (s * RNG.uniform(1.0, 1.6), s, s * 0.7), moss=0.2 if gz(p) > 1 else 0.0,
              seed=300 + k, yaw=RNG.uniform(0, 6.3))
     # boulders around the north beach spawn, big enough to hide behind
     nb = TREASURE_SPAWNS[7][1]
     for k, (dx, dy, s) in enumerate([(-1.4, 0.9, 1.4), (1.3, 1.2, 1.1), (0.2, 2.0, 0.9)]):
         p = nb + [dx, dy]
-        rock(g, (p[0], p[1], gz(p) + 0.2), (s * 1.3, s, s), "M_Rock", seed=400 + k, yaw=k)
+        boulder(g, (p[0], p[1], gz(p) + 0.2), (s * 1.3, s, s), seed=400 + k, yaw=k, subdiv=3)
         SOLIDS.append((p, s * 1.4))
     emit("Rocks", g, col)
     SOLIDS.extend([(p, 0.45) for p in palms] + [(p, 0.8) for p in bushes] + [(p, 1.25) for p in rocks])
@@ -1031,6 +1522,102 @@ def build_vegetation(col):
 # ---------------------------------------------------------------------------
 # gameplay markers and chests
 # ---------------------------------------------------------------------------
+
+PALMS = []
+
+
+def build_ground_cover(col):
+    """Grass, flowers, dune grass, shells and pebbles, kept off paths, buildings and the wreck."""
+    rng = np.random.default_rng(909)
+    sol = np.array([c for c, _ in SOLIDS])
+    rad = np.array([r for _, r in SOLIDS])
+
+    def clear(p, z_lo, z_hi, path_gap=0.9):
+        z = gz(p)
+        if not (z_lo <= z <= z_hi):
+            return None
+        if max(abs(p[0] - TEMPLE[0]), abs(p[1] - TEMPLE[1])) < 5.8 or np.hypot(*(p - CAMP)) < 3.4:
+            return None
+        if np.hypot(*(p - WRECK_POS)) < 6.0:
+            return None
+        d = p - DOCK_BASE
+        if -1.0 < d @ DOCK_DIR < DOCK_LEN + 1 and abs(d @ np.array([-DOCK_DIR[1], DOCK_DIR[0]])) < 1.8:
+            return None
+        if np.any(np.hypot(sol[:, 0] - p[0], sol[:, 1] - p[1]) < rad * 0.75):
+            return None
+        if float(path_dist(np.array([p[0]]), np.array([p[1]]))[0]) < path_gap:
+            return None
+        e = 0.5
+        if math.hypot(gz(p + [e, 0]) - gz(p - [e, 0]), gz(p + [0, e]) - gz(p - [0, e])) / (2 * e) > 0.5:
+            return None
+        return z
+
+    def sample():
+        return rng.uniform(-31, 31, 2)
+
+    n = 1 if FAST else 3
+    scatter_cover(col, "Grass", 900 * n, sample, lambda p: clear(p, 1.05, 30), lambda r: grass_tuft_geo(r), rng)
+    scatter_cover(col, "Flowers", 120 * n, sample, lambda p: clear(p, 1.1, 30),
+                  lambda r: flower_geo(r, ("M_FlowerRed", "M_FlowerYellow", "M_FlowerWhite")[int(r.integers(3))]),
+                  rng)
+    scatter_cover(col, "Dune_Grass", 120 * n, sample, lambda p: clear(p, 0.3, 1.0, 0.6),
+                  lambda r: grass_tuft_geo(r, ("M_DuneGrass", "M_GrassLight"), h=0.45, blades=9), rng)
+    shell_g = item_geo("shell")
+    star_g = item_geo("starfish")
+
+    def beach_bits(r):
+        k = int(r.integers(4))
+        return pebbles_geo(r) if k < 2 else Geo().merge(shell_g if k == 2 else star_g, scale=0.7)
+
+    scatter_cover(col, "Beach_Bits", 110 * n, sample, lambda p: clear(p, 0.05, 0.9, 0.5), beach_bits, rng)
+    scatter_cover(col, "Pebbles", 60 * n, sample, lambda p: clear(p, 1.0, 30, 0.0), lambda r: pebbles_geo(r), rng)
+    pal = np.array(PALMS) if PALMS else np.zeros((1, 2))
+
+    def under_palm():
+        return pal[int(rng.integers(len(pal)))] + rng.uniform(-2.2, 2.2, 2)
+
+    scatter_cover(col, "Ferns", 45 * n, under_palm, lambda p: clear(p, 0.9, 30), lambda r: fern_geo(r), rng)
+    scatter_cover(col, "Tall_Grass", 70 * n, sample, lambda p: clear(p, 1.3, 30, 1.2),
+                  lambda r: grass_tuft_geo(r, ("M_Grass", "M_GrassLight"), h=0.75, blades=22), rng)
+
+    def shallows(p):
+        z = gz(p)
+        return z if -1.6 < z < -0.35 and np.hypot(*(p - WRECK_POS)) > 5 else None
+
+    scatter_cover(col, "Seagrass", 45 * n, lambda: shore_point(rng.uniform(-np.pi, np.pi), inland=-rng.uniform(0.5, 3.5)),
+                  shallows, lambda r: seagrass_geo(r), rng)
+
+    def shore(p):  # rocks breaking the waterline
+        z = gz(p)
+        if not (-0.6 < z < 0.25) or np.hypot(*(p - WRECK_POS)) < 6.5:
+            return None
+        d = p - DOCK_BASE
+        if -1.0 < d @ DOCK_DIR < DOCK_LEN + 1 and abs(d @ np.array([-DOCK_DIR[1], DOCK_DIR[0]])) < 2.5:
+            return None
+        return z
+
+    def shore_rock(r):
+        g = Geo()
+        for k in range(int(r.integers(1, 4))):
+            sz = r.uniform(0.25, 0.65)
+            boulder(g, (r.uniform(-0.5, 0.5), r.uniform(-0.5, 0.5), sz * 0.2), (sz * 1.4, sz, sz * 0.7),
+                    seed=int(r.integers(1 << 30)), yaw=r.uniform(0, 6.3), subdiv=2)
+        return g
+
+    scatter_cover(col, "Shore_Rocks", 16 * n, lambda: rng.uniform(-36, 36, 2), shore, shore_rock, rng)
+
+    def path_edge():
+        pl = PATHS[int(rng.integers(len(PATHS)))]
+        i = int(rng.integers(len(pl) - 1))
+        a_, b_ = np.asarray(pl[i], float), np.asarray(pl[i + 1], float)
+        t = rng.random()
+        q = a_ + (b_ - a_) * t
+        nrm_ = np.array([-(b_ - a_)[1], (b_ - a_)[0]]) / (np.linalg.norm(b_ - a_) + 1e-9)
+        return q + nrm_ * rng.choice([-1, 1]) * rng.uniform(1.0, 1.4)
+
+    scatter_cover(col, "Path_Stones", 70 * n, path_edge, lambda p: clear(p, 0.3, 30, 0.85), lambda r: pebbles_geo(r),
+                  rng)
+
 
 def build_spawns(col):
     chest_closed, chest_open = chest_geo(False), chest_geo(True)
@@ -1071,10 +1658,13 @@ def build_spawns(col):
 # things that belong there: shells on the beach, urns in the temple, cannonballs
 # around the wreck.
 
-def lathe(g, prof, mat, n=10, cap_top=True, cap_bottom=True):
-    """prof: list of (radius, z); a surface of revolution around +z."""
+def lathe(g, prof, mat, n=10, cap_top=True, cap_bottom=True, groove=0.0):
+    """prof: list of (radius, z); a surface of revolution around +z.  `groove` insets every
+    other vertex by that fraction, so an even `n` reads as n/2 staves or ribs."""
     a = np.linspace(0, 2 * np.pi, n, endpoint=False)
-    rings = [np.stack([max(r, 1e-3) * np.cos(a), max(r, 1e-3) * np.sin(a), np.full(n, z)], axis=1) for r, z in prof]
+    k = 1 - groove * (np.arange(n) % 2)
+    rings = [np.stack([max(r, 1e-3) * k * np.cos(a), max(r, 1e-3) * k * np.sin(a), np.full(n, z)], axis=1)
+             for r, z in prof]
     return loft(g, rings, mat, cap_start=cap_bottom, cap_end=cap_top)
 
 
@@ -1574,13 +2164,37 @@ def plank_wall(g, site, a, b, z0, height, mat="M_Wood", door=None, window=None, 
             SOLIDS.append((site.w(p[0], p[1]), 0.2))
 
 
-def pyramid_roof(g, site, half, z_eave, z_apex, mat="M_Thatch", cy=0.0):
-    corners = [site.w3(sx * half, cy + sy * half, z_eave) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+def pyramid_roof(g, site, half, z_eave, z_apex, mat="M_Thatch", cy=0.0, layers=3):
+    """Thatched hip roof in overlapping layers with ragged, thick edges and a bound top knot."""
+    m = 7
+    sq = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+
+    def ring(hf, z, jag):
+        pts = []
+        for i in range(4):
+            (ax_, ay_), (bx_, by_) = sq[i], sq[(i + 1) % 4]
+            for j in range(m):
+                t = j / m
+                lx, ly = (ax_ + (bx_ - ax_) * t) * hf, (ay_ + (by_ - ay_) * t) * hf
+                pts.append(site.w3(lx, cy + ly, z - (jag if j % 2 else 0.0)))
+        return np.array(pts)
+
+    n = 4 * m
+    alt = "M_ThatchDark" if mat == "M_Thatch" else mat
+    for k in range(layers):
+        t0, t1 = k / layers, min(1.0, (k + 1) / layers + 0.12)
+        hf0, hf1 = half * (1 - t0) + 0.04, max(half * (1 - t1), 0.06)
+        z0 = z_eave + (z_apex - z_eave) * t0 - 0.06 * k
+        z1 = z_eave + (z_apex - z_eave) * t1
+        outer, inner, lip = ring(hf0, z0, 0.06), ring(hf1, z1, 0.0), ring(hf0 - 0.05, z0 - 0.16, 0.06)
+        v = np.concatenate([outer, inner, lip])
+        f = [[i, (i + 1) % n, n + (i + 1) % n, n + i] for i in range(n)]
+        f += [[2 * n + i, 2 * n + (i + 1) % n, (i + 1) % n, i] for i in range(n)]
+        f += [[2 * n + (i + 1) % n, 2 * n + i, n + i, n + (i + 1) % n] for i in range(n)]
+        g.add(v, f, mat if k % 2 == 0 else alt)
     apex = site.w3(0, cy, z_apex)
-    v = np.array(corners + [apex])
-    g.add(v, [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], mat)
-    # a second, slightly lower skin so the thatch reads thick from below
-    g.add(v - [0, 0, 0.12], [[1, 0, 4], [2, 1, 4], [3, 2, 4], [0, 3, 4]], mat)
+    ball(g, apex + [0, 0, 0.02], 0.16, alt, subdiv=1, squash=(1, 1, 1.4))
+    tube(g, apex - [0, 0, 0.1], apex + [0, 0, 0.12], 0.13, 0.13, "M_Rope", n=8)
 
 
 def ladder(g, bottom, top, width=0.6, mat="M_WoodDark"):
@@ -1617,11 +2231,36 @@ def build_lighthouse(col, lights):
         za, zb = H0 + (H1 - H0) * k / bands, H0 + (H1 - H0) * (k + 1) / bands
         tube(g, (c[0], c[1], za), (c[0], c[1], zb), r_at(za), r_at(zb),
              "M_LighthouseWhite" if k % 2 == 0 else "M_LighthouseRed", n=12)
-    box(g, at(r_at(H0 + 1) - 0.02, a_in, H0 + 0.95), (0.9, 0.22, 1.9), "M_WoodDark", rot=(0, 0, a_in + math.pi / 2))
+    for k in range(1, 13):  # mortar courses
+        zz = H0 + (H1 - H0) * k / 13
+        tube(g, (c[0], c[1], zz - 0.015), (c[0], c[1], zz + 0.015), r_at(zz) + 0.012, mat="M_Mortar", n=12)
+    tan = lambda aa: np.array([-math.sin(aa), math.cos(aa), 0.0])  # noqa: E731
+
+    def framed(aa, zz, w, h, fill):
+        base = at(r_at(zz) - 0.02, aa, zz)
+        rot = (0, 0, aa + math.pi / 2)
+        box(g, base, (w, 0.22, h), fill, rot=rot)
+        out = at(0.06, aa, 0) - np.array([c[0], c[1], 0])
+        box(g, base + out + [0, 0, h / 2 + 0.04], (w + 0.2, 0.2, 0.09), "M_StoneLight", rot=rot)
+        box(g, base + out - [0, 0, h / 2 + 0.04], (w + 0.24, 0.24, 0.08), "M_StoneLight", rot=rot)
+        for sd in (-1, 1):
+            box(g, base + out + tan(aa) * sd * (w / 2 + 0.05), (0.09, 0.2, h), "M_StoneLight", rot=rot)
+
+    framed(a_in, H0 + 0.95, 0.9, 1.9, "M_WoodDark")
+    for k in range(4):  # door planks and studs
+        q = at(r_at(H0 + 1) + 0.02, a_in, H0 + 0.95) + tan(a_in) * (-0.33 + 0.22 * k)
+        box(g, q, (0.2, 0.06, 1.85), "M_Wood", rot=(0, 0, a_in + math.pi / 2))
+    ball(g, at(r_at(H0 + 1) + 0.08, a_in, H0 + 0.95) + tan(a_in) * 0.3, 0.04, "M_Brass", subdiv=1)
+    for k in range(3):  # door steps
+        box(g, at(r_at(H0) + 0.35 + 0.3 * k, a_in, H0 - 0.15 - 0.2 * k), (1.3, 0.35, 0.2), "M_Stone",
+            rot=(0, 0, a_in + math.pi / 2))
     for zz, aa in ((H0 + 3.0, a_in + 2.2), (H0 + 5.0, a_in - 1.3), (H0 + 4.0, a_in + math.pi)):
-        box(g, at(r_at(zz) - 0.03, aa, zz), (0.35, 0.22, 0.6), "M_Dark", rot=(0, 0, aa + math.pi / 2))
+        framed(aa, zz, 0.35, 0.6, "M_Dark")
     # gallery, railing, lamp room, roof
     tube(g, (c[0], c[1], H1 - 0.18), (c[0], c[1], H1), 1.9, mat="M_StoneDark", n=14)
+    for k in range(16):  # corbels under the gallery
+        a = 2 * np.pi * k / 16
+        box(g, at(1.35, a, H1 - 0.38), (0.5, 0.18, 0.3), "M_StoneLight", rot=(0, 0, a))
     tube(g, (c[0], c[1], H1), (c[0], c[1], H1 + 0.25), 0.85, mat="M_StoneDark", n=8)
     tube(g, (c[0], c[1], H1 + 0.25), (c[0], c[1], H1 + 1.35), 0.72, mat="M_LanternGlow", n=8)
     for k in range(8):
@@ -1630,6 +2269,15 @@ def build_lighthouse(col, lights):
     tube(g, (c[0], c[1], H1 + 1.35), (c[0], c[1], H1 + 1.5), 0.98, mat="M_LighthouseRed", n=10)
     tube(g, (c[0], c[1], H1 + 1.5), (c[0], c[1], H1 + 2.4), 0.98, 0.0, "M_LighthouseRed", n=10)
     ball(g, (c[0], c[1], H1 + 2.5), 0.12, "M_Iron")
+    ball(g, (c[0], c[1], H1 + 0.8), 0.38, "M_LanternGlow", subdiv=2)  # the lamp itself
+    for zz in (H1 + 0.27, H1 + 1.33):
+        tube(g, (c[0], c[1], zz - 0.03), (c[0], c[1], zz + 0.03), 0.76, mat="M_Brass", n=8)
+    tube(g, (c[0], c[1], H1 + 2.5), (c[0], c[1], H1 + 3.1), 0.025, mat="M_Iron", n=5)  # weather vane
+    beam(g, (c[0] - 0.45, c[1], H1 + 3.0), (c[0] + 0.45, c[1], H1 + 3.0), 0.02, 0.02, "M_Iron")
+    g.add([(c[0] + 0.45, c[1], H1 + 3.12), (c[0] + 0.62, c[1], H1 + 3.0), (c[0] + 0.45, c[1], H1 + 2.88)],
+          [[0, 1, 2]], "M_Iron")
+    g.add([(c[0] - 0.45, c[1], H1 + 3.12), (c[0] - 0.3, c[1], H1 + 3.0), (c[0] - 0.45, c[1], H1 + 2.88)],
+          [[0, 1, 2]], "M_Iron")
     lights.append(np.array([c[0], c[1], H1 + 0.8]))
     # spiral stair around the outside, arriving at the gallery edge
     N = 26
@@ -2192,7 +2840,7 @@ def main():
 
     print(f"[layout] temple z={TEMPLE_Z:.2f} camp z={CAMP_Z:.2f} arch z={gz(ARCH):.2f} islet={ISLET.round(1)}")
     print(f"[layout] dock base={DOCK_BASE.round(1)} wreck={WRECK_POS.round(1)}")
-    build_terrain(land_col, 80 if FAST else 132)
+    build_terrain(land_col, 100 if FAST else 190)
     fire = []
     build_temple(mark_col, fire)
     wreck = build_shipwreck(mark_col)
@@ -2210,6 +2858,7 @@ def main():
     palms, _, _ = build_vegetation(veg_col)
     spawns, players = build_spawns(game_col)
     props, item_meshes = build_treasure_props(K.get_collection("TreasureProps", world_col), palms, wreck)
+    build_ground_cover(veg_col)
     for label, p in spawns:
         print(f"[spawn] {label:36s} ({p[0]:6.1f}, {p[1]:6.1f}, {p[2]:5.2f})")
 

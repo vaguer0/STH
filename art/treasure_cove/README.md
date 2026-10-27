@@ -53,6 +53,31 @@ tepedeki tapınakta birleşir.
 - Saklanmak için iki düzine kadar palmiye, ~25 çalı ve ~25 kaya; kuzey kumsalında arkasına saklanılabilecek
   büyük kayalar.
 
+## Detay
+
+- Kutular pah kırılmış kenarlı; yuvarlak parçalar yumuşak, keskin kenarlar sert gölgelenir
+  (köşe normalleri glb'de).
+- **Tapınak:** katlar tek tek taş bloklardan örülü (blok boyu ve tonu değişken, derzli),
+  üstleri döşeme taşlı, yer yer yosunlu; sütunlar yivli, entasisli, kaideli ve başlıklı,
+  kırık olanların uçları kırık; lento bloklu, dişli korniş, sarkan sarmaşıklar, kabartmalı sunak.
+- **Palmiyeler:** halka izli, tabanı genişleyen gövde; her yaprak dalı tek tek yaprakçıklı,
+  kuru sarkan yapraklar ve hindistan cevizi salkımları. Çalılar çok loblu, bir kısmı çiçekli.
+- **Batık gemi:** gövdede tahta kaplama sıraları, kopmuş halatlar, cıvadra, pencereli kıç
+  köşkü ve fener, karinada midye ve yosun.
+- **Deniz feneri:** taş derzleri, çerçeveli pencere ve kapı, kapı basamakları, balkon
+  konsolları, lamba ve pirinç halkalar, rüzgâr gülü.
+- Saz çatılar katmanlı, kenarları tırtıklı, tepesi bağlı; meşaleler bez sargılı.
+- **Zemin:** yumuşak gölgeli, ince tümsekli arazi; çimende ton lekeleri, kuru yamalar ve
+  kumlu kenarlar, kumda dalga izleri, ıslak kum şeridi ve köpük çizgisi, kayalık yamaçlarda
+  tabakalar, patikaların ortası daha aşınmış. Dik kaya yüzleri köşeli kalır.
+- **Doğal öğeler:** kayalar iki ölçekte engebeli, tabakalı, yüz yüz üç tonlu, üstleri
+  yosunlu; çalılar yaprak yaprak, bir kısmı beş taçyapraklı çiçekli; çim öbekleri kıvrık,
+  dibi koyu ucu açık; uzun çim, palmiye altlarında eğrelti otları, sığ suda deniz çayırı,
+  kıyıda dalgaya vuran kayalar, patika kenarlarında taşlar, kumsalda kumul otu, kabuk, deniz
+  yıldızı ve çakıl.
+- **Eşyalar:** sandıklar tahta tahta, perçinli, köşebentli, menteşeli ve kilitli; fıçılar
+  çıtalı ve çember kuşaklı; kasalar tahta kaplamalı, çerçeveli ve çaprazlı.
+
 ## Hazine noktaları
 
 Her `TreasureSpawn_##` boş nesnesinin altında bir `TreasureChest_##` sandığı vardır. Oyun
@@ -110,6 +135,9 @@ eşyalar tek bir mesh'i paylaşır (glb'de her şekil bir kez saklanır).
 
 ## Motor notları
 
+- glb toplam ~575 bin üçgen; bunun büyük kısmı zemin örtüsü (çim, çiçek, çakıl) ve bitki
+  örtüsü. Düşük donanım için `Grass`, `Flowers`, `Tall_Grass` gibi zemin örtüsü nesneleri
+  mesafeye göre gizlenebilir ya da kapatılabilir.
 - Birim metre, glTF'de +Y yukarı. Kuzey Blender'da +Y, glTF'de -Z.
 - Boş nesnelerin glTF `extras` alanında `kind` (`treasure_spawn`, `player_spawn`),
   `index` ve hazine noktaları için `label` bulunur; sandıklarda `kind = treasure_chest`.

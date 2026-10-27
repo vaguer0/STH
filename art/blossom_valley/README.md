@@ -48,6 +48,26 @@ kuzeydeki terasa çıkar; doğudaki köy sokağı da hafif bir rampayla terasa b
 - Kiraz ve akçaağaç ağaçları, çalılar (bir kısmı pembe açelya), kayalar; dağlarda karlı
   tepeler ve çam ağaçları.
 
+## Detay
+
+- Kutular pah kırılmış kenarlı; yuvarlak parçalar yumuşak, keskin kenarlar sert gölgelenir.
+- **Çatılar:** kiremit sıraları, kalkık köşeler, mahya ve kırma mahyalar, saçak tahtası ve
+  saçak altından görünen kiriş uçları; beşik çatılarda rüzgârlık tahtaları ve onigawara.
+- **Pagoda:** her katta korkuluklu balkon, altın çivili kapı panelleri, saçakları taşıyan
+  konsol grupları ve köşelerde rüzgâr çanları.
+- **Torii:** uçları kalkık kasagi, siyah ayak bilezikleri, kama takozları ve yazı levhası.
+  Taş fenerler altıgen kaide, ışıklı ocak ve kalkık çatılı.
+- **Evler:** sıva üstü ahşap çerçeve, kapı kasası, bambu stor, tabela, saksı ve odun yığını.
+- **Ağaçlar:** kirazlar iki kez çatallanan budaklı gövde ve dal uçlarında çok sayıda çiçek
+  kümesi; çamlar sarkık uçlu, tırtıklı katmanlar; bambular boğumlu, yapraklı dallı.
+- **Zemin:** yumuşak gölgeli, ince tümsekli arazi; çimende yonca lekeleri ve kuru yamalar,
+  uçurumlarda kaya tabakaları, yamaç diplerinde moloz, karlı tepeler; ana yolda basamak taşları.
+- **Doğal öğeler:** kayalar engebeli, tabakalı, üç tonlu ve yosunlu; dağ yamaçlarında kaya
+  çıkıntıları; çalılar yaprak yaprak (açelyalar çiçekli); kıvrık çim öbekleri ve uzun çim,
+  çiçekler, kirazların altına dökülmüş taç yaprakları, bambu ormanında kuru yaprak ve
+  eğrelti otları, göl ve dere kıyısında kamış ve hasırotu, gölde nilüfer yaprakları ve
+  çiçekleri, dere kıyısında çakıllar.
+
 ## Hazine noktaları
 
 Her `TreasureSpawn_##` boş nesnesinin altında siyah lake, altın köşeli bir
@@ -97,6 +117,9 @@ Eşyalar sulara, merdivene, yapılara, ağaçlara, patikalara ve spawn noktalar�
 
 ## Motor notları
 
+- glb toplam ~635 bin üçgen; bunun büyük kısmı zemin örtüsü (çim, çiçek, çakıl) ve bitki
+  örtüsü. Düşük donanım için `Grass`, `Flowers`, `Tall_Grass` gibi zemin örtüsü nesneleri
+  mesafeye göre gizlenebilir ya da kapatılabilir.
 - Birim metre, glTF'de +Y yukarı. Kuzey Blender'da +Y, glTF'de -Z.
 - `extras` alanları Kayıp Korsan Koyu ile aynı: boş nesnelerde `kind` (`treasure_spawn`,
   `player_spawn`), `index`, `label`; sandıklarda `kind = treasure_chest`; eşyalarda

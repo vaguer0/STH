@@ -2,12 +2,12 @@
 Void Dagger -- SeekThenHide
 ===========================
 
-The purple dagger, redesigned after Kamish's Wrath: a flame-shaped blade -- a dark,
-gently S-curved core whose edges break into grotesque, irregular teeth (fangs,
-back-curling hooks, forks, chipped stumps, saw clusters, long barbs) -- with a
-glowing vein down the spine.  The guard is a lumpy, organic knot round the blade
-root from which thick, gnarled, knobbly horns grow in every direction.  The grip is
-segmented like a tail of scales, and hand-drawn shadow flames burn off the teeth.
+The purple dagger: a broad, gently S-curved blade whose edges are hand-forged rather
+than machined -- a slow wave plus a few chips and nicks -- with a dark fuller band
+and a glowing vein down the spine.  The guard is a flat, forged bat-wing crossguard:
+thick wings that sweep up into claws, scalloped lower edges like wing fingers, a
+diamond boss, raised glowing enamel inlays and a heavy ink underlay.  The grip is
+segmented like a tail of scales, and hand-drawn shadow flames burn off the edge.
 
 Reuses the toolkit in ../mystic_katana/build_mystic_katana.py.
 
@@ -35,8 +35,8 @@ K.EXPORT_DIR = os.path.join(HERE, "export")
 K.RENDER_DIR = os.path.join(HERE, "renders")
 
 # dagger grip: shorter and slimmer than the katanas'
-K.Z_FUCHI_TOP = -0.0330
-K.Z_WRAP_TOP = -0.0400
+K.Z_FUCHI_TOP = -0.0245
+K.Z_WRAP_TOP = -0.0315
 K.Z_WRAP_BOT = -0.1300
 K.GRIP_CENTRE = 0.5 * (K.Z_WRAP_TOP + K.Z_WRAP_BOT)
 
@@ -77,10 +77,10 @@ K.setup_world_and_lights = void_lights
 # ---------------------------------------------------------------------------
 # blade outline (blade plane: y across, z along; cutting edge toward -y)
 # ---------------------------------------------------------------------------
-# The outline is grown procedurally: a core band along an S-curved spine, and on
-# each side a run of flame teeth of uneven size and spacing that lean toward the
-# tip.  Teeth on the cutting edge (-y) are bigger.  Valleys and tips are flagged
-# sharp so they survive the smoothing; everything else turns into fluid curves.
+# The outline follows an S-curved spine with a tapering half width.  Each edge gets a
+# slow hand-forged wave and a few chips (small sharp notches), so it is never a
+# perfectly clean CAD curve.  BLADE_TEETH holds anchor points on the edges where
+# the vein branches and the flames attach.
 
 BLADE_L = 0.288
 BLADE_T = 0.0018      # half thickness of the flat plate
@@ -93,7 +93,7 @@ def spine_y(z):
 
 
 def core_w(z):
-    return 0.0135 * np.clip(1 - (np.asarray(z, dtype=float) / BLADE_L) ** 1.8, 0, 1) ** 0.75 + 0.0006
+    return 0.0190 * np.clip(1 - (np.asarray(z, dtype=float) / BLADE_L) ** 1.7, 0, 1) ** 0.7 + 0.0006
 
 
 def chaikin(pts, sharp, iters=4):
@@ -117,66 +117,19 @@ def chaikin(pts, sharp, iters=4):
     return P
 
 
-# Tooth templates in tooth space: u runs along the blade from this valley (0) to
-# the next (1), v runs outward in units of the tooth height.  Sharp flags keep
-# tips and notches crisp through the smoothing.
-TOOTH_SHAPES = {
-    "fang":   [(0.30, 0.45, 0), (0.62, 0.86, 0), (0.92, 1.00, 1), (0.86, 0.42, 0)],
-    "hook":   [(0.25, 0.50, 0), (0.55, 0.95, 0), (0.90, 1.05, 0), (1.02, 0.80, 1), (0.84, 0.62, 0), (0.80, 0.35, 0)],
-    "fork":   [(0.18, 0.55, 0), (0.28, 1.00, 1), (0.42, 0.55, 1), (0.62, 0.80, 0), (0.74, 1.18, 1), (0.82, 0.40, 0)],
-    "broken": [(0.12, 0.55, 1), (0.33, 0.62, 1), (0.42, 0.44, 1), (0.66, 0.74, 1), (0.84, 0.30, 0)],
-    "saw":    [(0.12, 0.38, 1), (0.24, 0.10, 1), (0.38, 0.50, 1), (0.50, 0.14, 1), (0.66, 0.58, 1),
-               (0.78, 0.16, 1), (0.92, 0.42, 1)],
-    "barb":   [(0.42, 0.30, 0), (0.58, 1.00, 1), (0.64, 0.28, 0)],
-}
-
-
-def flame_teeth(rng, scale, span_range, weights):
-    names = list(weights)
-    prob = np.array([weights[n] for n in names], float)
-    prob /= prob.sum()
-    z, teeth = 0.016 + rng.uniform(0, 0.008), []
-    while z < BLADE_L * 0.8:
-        span = rng.uniform(*span_range)
-        z1 = min(z + span, BLADE_L * 0.83)
-        t = 0.5 * (z + z1) / BLADE_L
-        env = np.sin(np.pi * np.clip((t + 0.05) / 0.95, 0, 1)) ** 0.5
-        shape = str(rng.choice(names, p=prob))
-        h = scale * (0.004 + 0.021 * env * rng.uniform(0.35, 1.5))
-        if shape == "calm":
-            h = 0.0016
-        if shape == "barb":
-            h *= 1.35
-        teeth.append(dict(z0=z, z1=z1, h=h, lean=rng.uniform(-0.35, 1.6), shape=shape,
-                          bite=rng.uniform(0.0, 0.0035) if rng.random() < 0.6 else 0.0,
-                          jit=rng.normal(0, 1, (8, 2))))
-        z = z1
-    return teeth
-
-
-def side_points(side, teeth):
-    """Outline points of one side, walking up the blade."""
-    yc = lambda z, off: float(spine_y(z) + side * (core_w(z) + off))
-    pts = [(yc(z, 0.0), float(z), 0) for z in np.linspace(0.0, teeth[0]["z0"], 3)[1:-1]]
-    for tg in teeth:
-        z0, z1, h, lean = tg["z0"], tg["z1"], tg["h"], tg["lean"]
-        pts.append((yc(z0, -tg["bite"]), z0, 1))
-        if tg["shape"] == "calm":
-            continue
-        best = None
-        for k, (u, v, sh) in enumerate(TOOTH_SHAPES[tg["shape"]]):
-            u = u + 0.04 * tg["jit"][k % 8, 0]
-            v = v * (1 + 0.15 * tg["jit"][k % 8, 1])
-            zz = z0 + u * (z1 - z0) + 0.6 * lean * v * h
-            p = (yc(min(zz, BLADE_L * 0.9), v * h), zz, sh)
-            pts.append(p)
-            if best is None or v > best[0]:
-                best = (v, p)
-        root = 0.5 * (z0 + z1)
-        BLADE_TEETH.append((side, (float(spine_y(root)), root), best[1][:2], h))
-    z_end = teeth[-1]["z1"]
-    pts.append((yc(z_end, 0.0), z_end, 1))
-    pts += [(yc(z, 0.0), float(z), 0) for z in np.linspace(z_end, BLADE_L * 0.97, 5)[1:]]
+def edge_points(side, rng, chips, wave_amp):
+    """Outline points of one edge, walking up the blade: slow wave plus a few chips."""
+    zs = np.arange(0.0, BLADE_L * 0.97, 0.0045)
+    wave = wave_amp * K.noise1d(len(zs), int(rng.integers(1 << 20)), knots=6)
+    sharp = np.zeros(len(zs), int)
+    off = wave.copy()
+    for i in rng.choice(np.arange(3, len(zs) - 4), size=chips, replace=False):
+        off[i] -= rng.uniform(0.0012, 0.0028)                  # the chip
+        sharp[i - 1:i + 2] = 1
+    pts = [(float(spine_y(z) + side * (core_w(z) + o)), float(z), int(sh)) for z, o, sh in zip(zs[1:], off[1:], sharp[1:])]
+    for z in np.sort(rng.uniform(0.05, 0.85, 9 if side < 0 else 4)) * BLADE_L:
+        e = (float(spine_y(z) + side * core_w(z)), float(z))
+        BLADE_TEETH.append((side, (float(spine_y(z)), float(z)), e, 0.006))
     return pts
 
 
@@ -203,10 +156,8 @@ def blade_outline(spacing=0.0010):
         rng = np.random.default_rng(seed)
         BLADE_TEETH.clear()
         w0, y0 = float(core_w(0.0)), float(spine_y(0.0))
-        right = side_points(1, flame_teeth(rng, 0.5, (0.020, 0.05),                 # spine: smaller, sparse
-                                           dict(saw=0.3, barb=0.25, broken=0.2, fang=0.1, calm=0.15)))
-        left = side_points(-1, flame_teeth(rng, 1.45, (0.016, 0.045),              # cutting edge: grotesque
-                                           dict(fang=0.22, hook=0.2, fork=0.18, broken=0.14, saw=0.12, barb=0.14)))
+        right = edge_points(1, rng, chips=3, wave_amp=0.0007)         # spine: calmer
+        left = edge_points(-1, rng, chips=6, wave_amp=0.0011)         # cutting edge: more worked
         tip = (float(spine_y(BLADE_L)) + 0.004, BLADE_L + 0.014, 1)
         raw = [(y0 - w0, 0.0, 1), (y0 + w0, 0.0, 1)] + right + [tip] + left[::-1]
         P = chaikin([(y, z) for y, z, _ in raw], [sh for _, _, sh in raw])
@@ -215,10 +166,10 @@ def blade_outline(spacing=0.0010):
         tng = np.roll(P, -1, 0) - np.roll(P, 1, 0)
         nrm = np.column_stack([tng[:, 1], -tng[:, 0]])
         nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
-        P = P + nrm * (0.00035 * K.noise1d(len(P), seed, knots=max(8, len(P) // 14)))[:, None]   # hand wobble
+        P = P + nrm * (0.00025 * K.noise1d(len(P), seed, knots=max(8, len(P) // 14)))[:, None]   # hand wobble
         if not self_intersects(P):
             break
-    print(f"[dagger] outline seed {seed}, {len(BLADE_TEETH)} teeth, {len(P)} points")
+    print(f"[dagger] outline seed {seed}, {len(P)} points")
     area = np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
     return P if area > 0 else P[::-1]
 
@@ -345,13 +296,13 @@ def paint_dagger_blade(P, res=(1024, 2048)):
     stamp(spine, np.linspace(0.00085, 0.00018, len(zs)), vein)
     # a branch into every tooth, stopping short of its tip
     for side, root, tip, h in BLADE_TEETH:
-        if h < 0.006 or rng.random() < 0.4:             # only some teeth get a branch
+        if rng.random() < 0.45:                         # only some anchors get a branch
             continue
         a, b = np.array(root), np.array(tip)
         n = int(rng.integers(3, 6))
         pts = [a]
         for k in range(1, n + 1):
-            q = a + (b - a) * (0.72 * k / n)
+            q = a + (b - a) * (0.62 * k / n) + np.array([0.0, 0.004 * k / n])
             nrm = np.array([-(b - a)[1], (b - a)[0]]) / (np.linalg.norm(b - a) + 1e-12)
             pts.append(q + nrm * rng.uniform(-1, 1) * 0.0012)
         pts = np.array(pts)
@@ -364,9 +315,10 @@ def paint_dagger_blade(P, res=(1024, 2048)):
     def mixc(base, col, t):
         return base * (1 - t[..., None]) + col[None, None, :] * t[..., None]
 
-    off = np.abs(Y - spine_y(Z)) - core_w(Z)        # <0 inside the core band, >0 out in the teeth
-    in_core = K.smoothstep(0.0006, -0.0006, off)
-    reach = K.smoothstep(0.0, 0.022, off)
+    rel = np.abs(Y - spine_y(Z)) / np.maximum(core_w(Z), 1e-4)   # 0 on the spine, 1 at the edge
+    in_core = K.smoothstep(0.47, 0.41, rel)                         # dark fuller band
+    reach = K.smoothstep(0.45, 1.0, rel)
+    off = (rel - 0.44) * core_w(Z)
     mott = nz.fbm(Y / 0.012, Z / 0.03, octaves=4)
     streak = nz2.fbm(Y / 0.0012 + 2 * nz(Z / 0.05, 1.0), Z / 0.06, octaves=3)
     alb = mixc(np.broadcast_to(VOID["tooth"], (H, half, 3)).copy(), VOID["tooth_tip"], reach ** 0.9)
@@ -386,7 +338,7 @@ def paint_dagger_blade(P, res=(1024, 2048)):
     alb = np.clip(alb, 0, 1)
     emi = (VOID["vein"][None, None] * np.clip(halo * 0.9, 0, 1)[..., None]
            + VOID["vein_core"][None, None] * vein[..., None]
-           + VOID["vein"][None, None] * (K.smoothstep(0.006, 0.026, off) * 0.45)[..., None]
+           + VOID["vein"][None, None] * (K.smoothstep(0.75, 1.0, rel) * 0.3)[..., None]
            + VOID["vein"][None, None] * (K.smoothstep(0.0009, 0.0, D) * 0.45)[..., None])
     emi = np.clip(emi, 0, 1)
     h = K.gauss_blur((-0.00025 * vein).astype(np.float32), 1.2)
@@ -405,72 +357,64 @@ def paint_dagger_blade(P, res=(1024, 2048)):
 
 
 # ---------------------------------------------------------------------------
-# hilt: organic knot with gnarled horns, scaled grip, thorned tail pommel
+# hilt: bat-wing crossguard, scaled grip, tail pommel
 # ---------------------------------------------------------------------------
 
 AX_X, AX_Y, AX_Z = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
 
-# Gnarled horns growing out of the knot, as rough control polylines in world space
-# (x = off the flats, y = across, z = along).  Each gets its own jitter, knobs and
-# twist, so no two read alike.  (control points, base radius)
-HORNS = [
-    ([(0.000, -0.016, -0.008), (0.003, -0.033, -0.004), (0.000, -0.044, 0.014), (-0.004, -0.041, 0.040),
-      (-0.002, -0.031, 0.062)], 0.0085),                                        # big horn up the cutting edge
-    ([(0.003, -0.018, -0.018), (0.007, -0.035, -0.025), (0.005, -0.048, -0.020), (0.001, -0.054, -0.004)], 0.0058),
-    ([(0.000, -0.012, -0.027), (0.000, -0.023, -0.037), (0.001, -0.021, -0.053), (0.000, -0.012, -0.060)], 0.0050),
-    ([(0.000, 0.016, -0.010), (-0.002, 0.031, -0.004), (0.000, 0.037, 0.012), (0.002, 0.030, 0.026)], 0.0066),
-    ([(0.000, 0.016, -0.022), (0.001, 0.033, -0.030), (0.000, 0.046, -0.025), (0.000, 0.051, -0.014)], 0.0047),
-    ([(0.009, 0.002, -0.012), (0.020, -0.004, -0.007), (0.027, -0.009, 0.005)], 0.0042),          # off the flats
-    ([(-0.009, -0.003, -0.018), (-0.021, 0.004, -0.022), (-0.029, 0.010, -0.013)], 0.0040),
-    ([(0.009, 0.006, -0.024), (0.017, 0.012, -0.034), (0.019, 0.019, -0.045)], 0.0032),
-    ([(-0.008, 0.009, -0.006), (-0.016, 0.017, 0.002), (-0.018, 0.020, 0.016)], 0.0030),
-]
+# Bat-wing crossguard drawn in the blade plane (y across, z along); (y, z, sharp).
+WING = [(0.010, 0.000, 0), (0.022, 0.004, 0), (0.036, 0.012, 0), (0.047, 0.024, 0), (0.056, 0.040, 1),
+        (0.054, 0.022, 0), (0.060, 0.004, 1), (0.049, 0.004, 0), (0.052, -0.014, 1), (0.040, -0.009, 0),
+        (0.036, -0.024, 1), (0.026, -0.016, 0), (0.012, -0.016, 0)]
+BOSS = [(0.0, 0.010, 1), (0.014, 0.003, 0), (0.017, -0.009, 0), (0.0, -0.027, 1), (-0.017, -0.009, 0),
+        (-0.014, 0.003, 0)]
+BOSS_HALF = 0.0090
+WING_HALF = 0.0044
 
 
-def horn(mb, ctrl, r0, seed, mat=1):
-    """A thick, knobbly, tapering horn swept along a jittered curve."""
-    rng = np.random.default_rng(seed)
-    c = np.array(ctrl, float)
-    c[1:] += rng.normal(0, 0.0018, c[1:].shape)
-    path = K.resample_polyline(K.catmull_rom(list(c), 12), 40)
-    t0 = path[1] - path[0]
-    ref = AX_Z if abs(t0 @ AX_X) > 0.8 * np.linalg.norm(t0) else AX_X     # never parallel to the start
-    T, N, Bv = K.rotation_minimizing_frames(path, ref)
-    s = np.linspace(0, 1, len(path))
-    knobs = rng.uniform(0.15, 0.85, int(rng.integers(2, 5)))
-    nz = K.Noise2(seed)
-    profs = []
-    for k, sk in enumerate(s):
-        r = r0 * (1 - sk) ** 0.9 + 0.0003
-        r *= 1 + 0.22 * np.sum(np.exp(-((sk - knobs) / 0.035) ** 2))
-        th = np.linspace(0, 2 * math.pi, 11, endpoint=False) + 0.9 * sk
-        rr = r * (1 + 0.14 * (nz(np.cos(th) * 2 + 3, np.sin(th) * 2 + sk * 9) - 0.5) * 2)
-        profs.append(np.column_stack([rr * np.cos(th), 0.82 * rr * np.sin(th)]))
-    mb.cur_mat = mat
-    K.sweep(mb, path, (N, Bv), profs, cap_start='flat', cap_end=0.004)
-    mb.cur_mat = 0
+def guard_shape(pts, sy=1.0, scale=1.0):
+    P = chaikin([(y * sy * scale, z * scale) for y, z, _ in pts], [s for _, _, s in pts], iters=3)
+    area = np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
+    return P if area > 0 else P[::-1]
+
+
+def grow(o, d):
+    t = np.roll(o, -1, 0) - np.roll(o, 1, 0)
+    n = np.column_stack([t[:, 1], -t[:, 0]])
+    n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
+    o2 = o + n * d
+    for _ in range(2):
+        o2 = 0.5 * o2 + 0.25 * (np.roll(o2, 1, 0) + np.roll(o2, -1, 0))
+    return o2
+
+
+def inset(o, k):
+    c = o.mean(axis=0)
+    return c + (o - c) * k
+
+
+def plaque(mb, outline, half, mat, bevel=0.4, rings=3):
+    sub = K.MeshBuilder()
+    K.extrude_shape(sub, outline, 2 * half, bevel=bevel, bevel_rings=rings)
+    sub.face_mat = [mat] * len(sub.faces)
+    if mat == 2:                       # flat ink: almost no atlas space
+        sub.uv_phys = [[(u * 0.06, v * 0.06) for u, v in f] for f in sub.uv_phys]
+    K.place_local(sub, np.zeros(3), AX_Y, AX_Z, AX_X)     # local x->Y, y->Z, thickness->X
+    mb.merge(sub)
 
 
 def build_guard(col):
-    """Lumpy organic knot round the blade root, sprouting gnarled horns."""
+    """Forged bat-wing crossguard: metal plates, raised glowing inlays, ink underlay."""
     mb = K.MeshBuilder()
-    nz = K.Noise2(5)
-    z_top, z_bot = 0.004, K.Z_FUCHI_TOP + 0.001
-    zs = np.linspace(z_top, z_bot, 14)
-
-    def outline(z):
-        t = (z_top - z) / (z_top - z_bot)
-        bulge = np.sin(np.pi * np.clip(t * 1.15, 0, 1)) ** 0.7
-        hx = 0.0058 + 0.0058 * bulge
-        hy = 0.0165 + 0.0055 * bulge - 0.006 * t ** 2
-        th = np.linspace(0, 2 * math.pi, 40, endpoint=False)
-        lump = 1 + 0.16 * (nz(np.cos(th) * 3 + 7, np.sin(th) * 3 + z * 260) - 0.5) * 2
-        c, s_ = np.cos(th), np.sin(th)
-        return np.column_stack([hx * np.sign(c) * np.abs(c) ** 0.8, hy * np.sign(s_) * np.abs(s_) ** 0.8]) * lump[:, None]
-
-    K.loft_z(mb, [(z, z) for z in zs], outline, cap_top='flat', cap_bottom='flat')
-    for i, (ctrl, r0) in enumerate(HORNS):
-        horn(mb, ctrl, r0, 300 + i)
+    boss = guard_shape(BOSS)
+    plaque(mb, grow(boss, 0.0009), BOSS_HALF * 0.86, 2, bevel=0.0, rings=0)
+    plaque(mb, boss, BOSS_HALF, 0, bevel=0.45)
+    plaque(mb, inset(boss, 0.5) + np.array([0.0, -0.002]), BOSS_HALF + 0.0012, 1, bevel=0.6, rings=2)
+    for sy, sc in ((1.0, 1.0), (-1.0, 1.12)):         # the cutting-edge wing is the bigger one
+        w = guard_shape(WING, sy, sc)
+        plaque(mb, grow(w, 0.0009), WING_HALF * 0.86, 2, bevel=0.0, rings=0)
+        plaque(mb, w, WING_HALF, 0, bevel=0.4)
+        plaque(mb, inset(w, 0.55), WING_HALF + 0.0009, 1, bevel=0.6, rings=2)
     return mb.to_object("Hilt_Guard", col)
 
 
@@ -514,30 +458,7 @@ def build_pommel(col):
              (zb - 0.010, 1.12, 2.4), (zb - 0.016, 0.86, 2.2), (zb - 0.026, 0.58, 2.1), (zb - 0.036, 0.32, 2.0),
              (zb - 0.042, 0.12, 2.0)]
     K.loft_z(mb, rings, outline, cap_top=None, cap_bottom=0.007, sharp_rings=(3, 4))
-    for i, (ctrl, r0) in enumerate((     # small gnarled thorns off the tail
-            ([(0.0, 0.008, zb - 0.004), (0.002, 0.017, zb - 0.010), (0.0, 0.020, zb - 0.022)], 0.0034),
-            ([(0.0, -0.008, zb - 0.006), (-0.002, -0.018, zb - 0.008), (0.0, -0.024, zb - 0.017)], 0.0038),
-            ([(0.006, 0.0, zb - 0.010), (0.014, 0.003, zb - 0.016), (0.016, 0.006, zb - 0.027)], 0.0026))):
-        horn(mb, ctrl, r0, 400 + i)
     return mb.to_object("Hilt_Pommel", col)
-
-
-def horn_painter(name):
-    """Gnarled horn: dark at the root, ringed, warming to glowing lilac at the tip."""
-    k = K.NodeKit(bpy.data.materials.new(name))
-    ao, edge, hl = k.painter_basics(ao_dist=0.004)
-    _, along = k.uv("UVParam")
-    nz = k.noise(160.0, 4.0)
-    rings = k.sstep(0.55, 0.95, k.math('SINE', k.add(k.mul(along, 2 * math.pi * 7), k.mul(nz, 4.0))))
-    v = k.add(k.add(k.mul(hl, 0.45), k.mul(ao, 0.55)), k.add(k.mul(rings, -0.16), k.mul(k.sub(nz, 0.5), 0.1)))
-    col = k.ramp(v, [(0.0, "#05020a"), (0.4, "#1d0c2e"), (0.75, "#43206b"), (1.0, "#8d63c4")])
-    tipw = k.sstep(0.55, 1.0, along)
-    col = k.mix(col, K.lin("#c79bff"), k.mul(tipw, 0.8))
-    col = k.mix(col, K.lin("#e6d3ff"), k.mul(edge, 0.45))
-    emi = k.mix(k.gray(0.0), K.lin("#9a40ff"), k.mul(k.sstep(0.78, 1.0, along), 0.7))
-    k.finish(col, emi, (1.0, 0.5, 0.0), k.mul(rings, -0.00005))
-    K.PAINTER_SOCKETS[k.mat.name] = k.sockets
-    return k.mat
 
 
 def scale_painter(name):
@@ -563,8 +484,10 @@ def build_hilt(col):
         "pommel": build_pommel(col),
     }
     scales = scale_painter("P_DragonScale")
-    horns = horn_painter("P_Horn")
-    mats = {"guard": [scales, horns], "pommel": [scales, horns], "grip": scales,
+    metal = K.painter("iron", "P_VoidMetal")
+    inlay = K.painter("enamel", "P_VoidInlay", "#2a0c4a", "#7a35d0", "#c79bff", "#efe2ff", "#9a40ff", 0.55)
+    ink = K.painter("enamel", "P_GuardInk", "#05020a", PAL["ink"], "#1d1028", "#1d1028")
+    mats = {"guard": [metal, inlay, ink], "pommel": metal, "grip": scales,
             "fuchi": K.painter("iron", "P_Fuchi", wave_v=0.0036)}
     for key, obj in parts.items():
         for m in (mats[key] if isinstance(mats[key], list) else [mats[key]]):

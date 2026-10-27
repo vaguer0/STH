@@ -38,14 +38,15 @@ K.Z_WRAP_TOP = -0.0300
 K.Z_WRAP_BOT = -0.1260
 K.GRIP_CENTRE = 0.5 * (K.Z_WRAP_TOP + K.Z_WRAP_BOT)
 K.ITO_PITCH = 0.031
-K.ITO_W = 0.0072
+K.ITO_W = 0.0058
+K.ITO_T = 0.0008
 K.ITO_Z0 = K.Z_WRAP_TOP - 0.004
 
 
 def dagger_handle_axes(z):
     t = np.clip((K.Z_WRAP_TOP - z) / (K.Z_WRAP_TOP - K.Z_WRAP_BOT), 0, 1)
     waist = np.sin(np.pi * t) ** 1.2
-    return 0.0093 - 0.0007 * waist, 0.0122 - 0.0010 * waist
+    return 0.0068 - 0.0005 * waist, 0.0089 - 0.0007 * waist
 
 
 K.handle_axes = dagger_handle_axes
@@ -91,8 +92,8 @@ BLADE_PTS = [
     (0.0185, 0.085, 0), (0.0190, 0.064, 1), (0.0255, 0.055, 1), (0.0200, 0.046, 1),     # breaker tooth
     (0.0205, 0.030, 0), (0.0170, 0.014, 0),
 ]
-BLADE_T = 0.0036      # half thickness of the flat
-BLADE_D = 0.010       # width of the ground bevel
+BLADE_T = 0.0017      # half thickness of the flat plate
+BLADE_D = 0.0045      # width of the ground edge bevel
 
 
 def chaikin(pts, sharp, iters=4):
@@ -152,7 +153,8 @@ def inside(Q, P):
 
 
 def blade_thickness(d):
-    return BLADE_T * np.clip(d / BLADE_D, 0, 1) ** 0.6 * (0.9 + 0.1 * np.clip(d / 0.02, 0, 1))
+    """Flat plate with a narrow ground bevel at the edge -- no swollen middle."""
+    return BLADE_T * np.clip(d / BLADE_D, 0, 1) ** 0.8
 
 
 def build_dagger_blade(col):
@@ -313,8 +315,53 @@ def paint_dagger_blade(P, res=(1024, 2048)):
 # hilt: claw guard, gem, grip, spiked pommel
 # ---------------------------------------------------------------------------
 
-GUARD_PROFILE = [(-0.0255, -0.004), (-0.020, 0.0035), (0.0, 0.0045), (0.020, 0.0035), (0.0255, -0.004),
-                 (0.017, -0.012), (0.0115, -0.0215), (-0.0115, -0.0215), (-0.017, -0.012)]
+# Guard drawn in the blade plane (y across, z along), like the reference daggers:
+# a thick shield-shaped boss and, on each side, a heavy sickle wing sweeping up
+# toward the blade plus a shorter one hooking down toward the grip.  (y, z, sharp)
+GUARD_BOSS = [(0.0, 0.0065, 1), (0.0150, 0.0040, 0), (0.0215, -0.0080, 0), (0.0140, -0.0215, 0),
+              (0.0, -0.0270, 1), (-0.0140, -0.0215, 0), (-0.0215, -0.0080, 0), (-0.0150, 0.0040, 0)]
+GUARD_WING_UP = [(0.0120, -0.0110, 0), (0.0300, -0.0130, 0), (0.0470, -0.0050, 0), (0.0575, 0.0110, 0),
+                 (0.0560, 0.0330, 0), (0.0440, 0.0560, 1), (0.0470, 0.0330, 0), (0.0430, 0.0150, 0),
+                 (0.0330, 0.0060, 1), (0.0300, 0.0110, 0), (0.0200, 0.0040, 0), (0.0120, 0.0030, 0)]
+GUARD_WING_DOWN = [(0.0120, -0.0140, 0), (0.0270, -0.0175, 0), (0.0380, -0.0270, 0), (0.0430, -0.0480, 1),
+                   (0.0335, -0.0330, 0), (0.0250, -0.0275, 1), (0.0230, -0.0225, 0), (0.0120, -0.0215, 0)]
+GUARD_BOSS_HALF = 0.0105
+
+
+def guard_shape(pts, sy=1.0, scale=1.0):
+    P = chaikin([(y * sy * scale, z * scale) for y, z, _ in pts], [s for _, _, s in pts], iters=3)
+    area = np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
+    return P if area > 0 else P[::-1]
+
+
+def build_guard(col):
+    mb = K.MeshBuilder()
+    X, Y, Z = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
+
+    def plaque(outline, half, bevel=0.42):
+        sub = K.MeshBuilder()
+        K.extrude_shape(sub, outline, 2 * half, bevel=bevel, bevel_rings=3)
+        K.place_local(sub, np.zeros(3), Y, Z, X)   # local x -> Y, local y -> Z, thickness -> X
+        mb.merge(sub)
+
+    plaque(guard_shape(GUARD_BOSS), GUARD_BOSS_HALF)
+    for sy, sc in ((1.0, 1.0), (-1.0, 1.12)):      # the edge side (-y) wing is the bigger one
+        plaque(guard_shape(GUARD_WING_UP, sy, sc), 0.0048)
+        plaque(guard_shape(GUARD_WING_DOWN, sy, sc), 0.0040)
+    return mb.to_object("Hilt_Guard", col)
+
+
+def build_gem(col):
+    mb = K.MeshBuilder()
+    th = np.linspace(0, 2 * math.pi, 9, endpoint=False) + 0.2
+    oct_ = np.column_stack([np.cos(th) * 0.0062, np.sin(th) * 0.0078])
+    for sx in (1, -1):
+        sub = K.MeshBuilder()
+        K.extrude_shape(sub, oct_, 0.0042, bevel=0.55, bevel_rings=2)
+        K.place_local(sub, np.array([sx * (GUARD_BOSS_HALF + 0.0011), 0.0, -0.0095]), np.array([0, sx * 1.0, 0]),
+                      np.array([0, 0, 1.0]), np.array([sx * 1.0, 0, 0]))
+        mb.merge(sub)
+    return mb.to_object("Hilt_Gem", col)
 
 
 def spike(mb, ctrl, r0, flat=0.55, twist=0.6):
@@ -329,38 +376,6 @@ def spike(mb, ctrl, r0, flat=0.55, twist=0.6):
         rr = r * np.array([1.0, 0.62, 0.62, 1.0, 0.62, 0.62])
         profs.append(np.column_stack([rr * np.cos(ph), flat * rr * np.sin(ph)]))
     K.sweep(mb, path, (N, Bv), profs, cap_start='flat', cap_end=0.003, sharp_cols=(0, 3))
-
-
-def build_guard(col):
-    mb = K.MeshBuilder()
-    X, Y, Z = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
-    prof = K.catmull_rom(GUARD_PROFILE, 6, closed=True)
-    sub = K.MeshBuilder()
-    K.extrude_shape(sub, prof, 0.016, bevel=0.4, bevel_rings=3)
-    K.place_local(sub, np.zeros(3), Y, Z, X)
-    mb.merge(sub)
-    for sy in (1, -1):        # claws sweeping toward the blade, then toward the grip
-        long = 1.0 if sy < 0 else 0.8
-        spike(mb, [(0, sy * 0.020, -0.004), (0, sy * 0.036, 0.004), (0, sy * 0.044, 0.024 * long),
-                   (0, sy * 0.039, 0.050 * long)], 0.0095, flat=0.42)
-        spike(mb, [(0, sy * 0.018, -0.015), (0, sy * 0.030, -0.024), (0, sy * 0.034, -0.040)], 0.0068, flat=0.42)
-    for sx in (1, -1):        # small horns off the flats, like the old dagger's star guard
-        spike(mb, [(sx * 0.006, 0.0, -0.006), (sx * 0.020, 0.006, -0.003), (sx * 0.030, 0.012, 0.006)], 0.005,
-              flat=0.5)
-    return mb.to_object("Hilt_Guard", col)
-
-
-def build_gem(col):
-    mb = K.MeshBuilder()
-    th = np.linspace(0, 2 * math.pi, 9, endpoint=False) + 0.2
-    oct_ = np.column_stack([np.cos(th) * 0.0062, np.sin(th) * 0.0078])
-    for sx in (1, -1):
-        sub = K.MeshBuilder()
-        K.extrude_shape(sub, oct_, 0.0042, bevel=0.55, bevel_rings=2)
-        K.place_local(sub, np.array([sx * 0.0072, 0.0, -0.0085]), np.array([0, sx * 1.0, 0]),
-                      np.array([0, 0, 1.0]), np.array([sx * 1.0, 0, 0]))
-        mb.merge(sub)
-    return mb.to_object("Hilt_Gem", col)
 
 
 def build_pommel(col):

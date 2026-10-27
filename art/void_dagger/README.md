@@ -25,13 +25,15 @@ setini (`../mystic_katana/build_mystic_katana.py`) kullanır; her şey
 
 - **Namlu:** referanslardaki gibi ağır, hilal gibi sırt tarafına kıvrılan, dışbükey keskin
   ağızlı bir namlu; sırtta geriye bakan iki çengel ve bir kırıcı diş, sivri uç. Elle
-  çizilen 2D konturdan kısıtlı Delaunay üçgenlemesiyle üretilir ve kenara doğru incelen
-  gerçek bir bileme kesitiyle şişirilir; çengeller ve dişler gerçek geometri.
+  çizilen 2D konturdan kısıtlı Delaunay üçgenlemesiyle üretilir. Kesit, referanslardaki
+  gibi ince düz bir plaka; yalnızca kenardaki dar bileme şeridinde incelir (ortası
+  şişkin değil). Çengeller ve dişler gerçek geometri.
 - **Doku:** obsidyen-mor gövde, açık lila iki tonlu bileme şeridi ve koyu mürekkep
   çizgisi, namlu boyunca dallanan parlayan mor boşluk çatlakları (oyma + emission).
-- **Kabza:** siyah-mor metal blok, namluya ve sapa doğru kıvrılan yassı pençeler, yanlarda
-  küçük boynuzlar (eski hançerin yıldız muhafızından), iki yüzde parlayan mor taş,
-  mor ipek çapraz sargı, pençeli sivri topuz, kalın mürekkep konturu.
+- **Kabza:** kalın, kalkan biçimli bir gövde ve her yanda kalın, yuvarlak kenarlı orak
+  kanatlar: namluya doğru kıvrılan büyük bir kanat (keskin ağız tarafında daha büyük)
+  ve sapa doğru inen kısa bir kanca. Gövdenin iki yüzünde parlayan mor taş; ince sap
+  üzerinde mor ipek çapraz sargı, pençeli sivri topuz, kalın mürekkep konturu.
 - **Gölge alevi:** keskin ağız boyunca rastgele aralıklı, asimetrik üç tonlu (koyu mor /
   mor / lila) el çizimi alev kümeleri; çengellerin ve ucun arkasından kopan alev dilleri.
   6 çizim üçerli değişir (0,75 sn döngü); çatlaklar ve taş yavaş nabızla parlar.

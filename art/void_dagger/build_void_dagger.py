@@ -4,9 +4,10 @@ Void Dagger -- SeekThenHide
 
 The purple dagger: a broad, gently S-curved blade whose edges are hand-forged rather
 than machined -- a slow wave plus a few chips and nicks -- with a dark fuller band
-and a glowing vein down the spine.  The guard is a claw collar that clutches the top
-of the grip: a faceted forged sleeve with a glowing inlay ring, two bladed quillons that
-step out and sweep down along the grip, and four talons wrapping down round it.  The grip is
+and a glowing vein down the spine.  The guard is a dark obsidian mass that flows
+from the blade root onto the grip: thick, layered, its edges shattered into uneven
+shards -- up and out along the blade, down and out over the grip -- with a glowing
+violet crack network through it, and a shard-edged sleeve over the top of the grip.  The grip is
 segmented like a tail of scales, and hand-drawn shadow flames burn off the edge.
 
 Reuses the toolkit in ../mystic_katana/build_mystic_katana.py.
@@ -362,66 +363,108 @@ def paint_dagger_blade(P, res=(1024, 2048)):
 
 AX_X, AX_Y, AX_Z = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
 
-# Claw collar: a 3D sleeve clutching the top of the grip, with bladed quillons and
-# talons that sweep DOWN along the grip (never up toward the blade).
+# Obsidian guard: a shattered, layered mass drawn in the blade plane (y across, z
+# along), thicker than the blade so it encases the blade root, plus a sleeve round
+# the top of the grip.
 
-COLLAR_TOP, COLLAR_BOT = 0.0045, -0.034
-
-
-def lens_profile(width, thick):
-    """Bladed cross-section: sharp edges at +/- width (B axis), thin along N."""
-    return np.array([(0.0, width), (0.55 * thick, 0.55 * width), (thick, 0.0), (0.55 * thick, -0.55 * width),
-                     (0.0, -width), (-0.55 * thick, -0.55 * width), (-thick, 0.0), (-0.55 * thick, 0.55 * width)])
+GUARD_Z = (-0.044, 0.072)          # bottom over the grip, top up along the blade
 
 
-def claw(mb, ctrl, width, thick, ref, mat=0, n=36):
-    """Sweep a tapering, sharp-edged blade/talon along a smooth curve (no knobs)."""
-    path = K.resample_polyline(K.catmull_rom([np.array(c, float) for c in ctrl], 14), n)
-    T, N, Bv = K.rotation_minimizing_frames(path, np.asarray(ref, float))
-    s = np.linspace(0, 1, n)
-    taper = (1 - s) ** 0.8 * (0.85 + 0.15 * np.sin(np.pi * np.clip(s / 0.35, 0, 1)))
-    profs = [lens_profile(width * t + 0.0002, thick * t + 0.00015) for t in taper]
-    mb.cur_mat = mat
-    K.sweep(mb, path, (N, Bv), profs, cap_start='flat', cap_end=0.003, sharp_cols=(0, 4))
-    mb.cur_mat = 0
+def guard_halfwidth(z):
+    t = (np.asarray(z, float) - GUARD_Z[0]) / (GUARD_Z[1] - GUARD_Z[0])
+    return 0.010 + 0.014 * np.sin(np.pi * np.clip(t / 0.82, 0, 1)) ** 0.8 * (1 - 0.25 * t) + 0.003 * t
 
 
-def collar_outline(z, grow_):
-    """Faceted (octagon-ish) section: wide across the blade at the top, grip-sized below."""
-    t = np.clip((COLLAR_TOP - z) / (COLLAR_TOP - COLLAR_BOT), 0, 1)
-    hx_g, hy_g = dagger_handle_axes(K.Z_WRAP_TOP)
-    hx = K.lerp(0.0080, hx_g + 0.0016, t ** 0.7) + grow_
-    hy = K.lerp(0.0225, hy_g + 0.0016, t ** 0.8) + grow_
-    return K.superellipse(32, hx, hy, 1.45, phase=math.pi / 8)
+def guard_side(side, rng):
+    """One edge, bottom to top: jittered base line broken by shards of varied size and direction."""
+    pts, z = [], GUARD_Z[0] + 0.004
+    while z < GUARD_Z[1] - 0.006:
+        span = rng.uniform(0.011, 0.024)
+        z1 = min(z + span, GUARD_Z[1] - 0.004)
+        w0 = float(guard_halfwidth(z)) + rng.uniform(-0.0025, 0.0005)
+        pts.append((side * w0, z, 1))
+        t = (0.5 * (z + z1) - GUARD_Z[0]) / (GUARD_Z[1] - GUARD_Z[0])
+        if rng.random() < 0.55:
+            ang = math.radians(K.lerp(-62, 58, t) + rng.uniform(-18, 18))      # down-out low, up-out high
+            ln = rng.uniform(0.016, 0.034) * (1.4 if rng.random() < 0.3 else 1.0)
+            zm = 0.5 * (z + z1) + rng.uniform(-0.2, 0.2) * (z1 - z)
+            wm = float(guard_halfwidth(zm))
+            tip = (side * (wm + ln * math.cos(ang)), zm + ln * math.sin(ang))
+            if rng.random() < 0.3:                                              # a split shard
+                pts.append((side * (wm + 0.45 * ln * math.cos(ang)), zm + 0.45 * ln * math.sin(ang) - 0.002, 1))
+            pts.append((tip[0], tip[1], 1))
+        z = z1
+    return pts
+
+
+def guard_outline(rng):
+    for _ in range(80):
+        right = guard_side(1.0, rng)
+        left = guard_side(-1.0, rng)
+        zt, zb = GUARD_Z[1], GUARD_Z[0]
+        wt = float(guard_halfwidth(zt))
+        top = [(wt * k, zt + (rng.uniform(0.012, 0.03) if i % 2 == 0 else rng.uniform(-0.004, 0.002)), 1)
+               for i, k in enumerate(np.linspace(0.85, -0.85, 7))]                  # shards up along the blade
+        wb = float(guard_halfwidth(zb))
+        bottom = [(wb * k, zb - (rng.uniform(0.006, 0.016) if i % 2 else rng.uniform(0.0, 0.002)), 1)
+                  for i, k in enumerate(np.linspace(-0.8, 0.8, 5))]                 # a couple of points over the grip
+        raw = bottom + right + top + left[::-1]
+        P = chaikin([(y, z) for y, z, _ in raw], [s_ for _, _, s_ in raw], iters=2)
+        P = K.resample_polyline(np.vstack([P, P[:1]]), 380)[:-1]
+        if not self_intersects(P):
+            break
+    area = np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
+    return P if area > 0 else P[::-1]
+
+
+def plate(mb, outline, half, z_off=0.0, bevel=0.35, rings=3):
+    sub = K.MeshBuilder()
+    K.extrude_shape(sub, outline, 2 * half, bevel=bevel, bevel_rings=rings)
+    K.place_local(sub, np.array([0.0, 0.0, z_off]), AX_Y, AX_Z, AX_X)     # local x->Y, y->Z, thickness->X
+    mb.merge(sub)
 
 
 def build_guard(col):
     mb = K.MeshBuilder()
-    z0, z1 = COLLAR_TOP, COLLAR_BOT
-    rings = [(z0, z0, 0.0004), (z0 - 0.0008, z0 - 0.0008, 0.0022), (z0 - 0.0040, z0 - 0.0040, 0.0024),
-             (z0 - 0.0060, z0 - 0.0060, 0.0008), (z0 - 0.012, z0 - 0.012, 0.0), (z0 - 0.022, z0 - 0.022, 0.0),
-             (z1 + 0.003, z1 + 0.003, 0.0006), (z1, z1, 0.0)]
-    K.loft_z(mb, rings, collar_outline, cap_top='flat', cap_bottom='flat', sharp_rings=(1, 2, 3))
-    # glowing inlay ring, standing proud of the sleeve
-    zi = z0 - 0.015
-    ring = K.MeshBuilder()
-    K.loft_z(ring, [(zi + 0.0016, zi + 0.0016, 0.0002), (zi + 0.0010, zi, 0.0009), (zi - 0.0010, zi, 0.0009),
-                    (zi - 0.0016, zi - 0.0016, 0.0002)], collar_outline, cap_top=None, cap_bottom=None)
-    ring.face_mat = [1] * len(ring.faces)
-    mb.merge(ring)
-    # bladed quillons: out from the collar, then down along the grip, tips curling in
-    for side, sc in ((1.0, 0.9), (-1.0, 1.1)):
-        y = lambda v: side * v * sc
-        claw(mb, [(0.0, y(0.016), -0.002), (0.0, y(0.033), -0.008), (0.0, y(0.040), -0.024),
-                  (0.0, y(0.034), -0.048), (0.0, y(0.021), -0.066)], 0.0105 * sc, 0.0036, (1.0, 0.0, 0.0))
-    # talons wrapping down round the grip on the front/back diagonals
-    for k, az in enumerate((0.55, 2.6, -0.55, -2.6)):
-        c, s_ = math.cos(az), math.sin(az)
-        L = 0.040 if k % 2 == 0 else 0.032
-        pts = [(r * c, r * s_ * 1.3, z) for r, z in ((0.010, -0.010), (0.016, -0.018), (0.016, -0.018 - 0.4 * L),
-                                                     (0.012, -0.018 - L))]
-        claw(mb, pts, 0.0056, 0.0026, (c, s_ * 1.3, 0.0))
+    rng = np.random.default_rng(1234)
+    P = guard_outline(rng)
+    plate(mb, P, 0.0056)
+    c = P.mean(axis=0)
+    inner = c + (P - c) * np.array([0.62, 0.8])                                # raised second layer
+    plate(mb, inner, 0.0072, bevel=0.45)
+    # sleeve over the top of the grip, its lower rim broken into points
+    nz = K.Noise2(9)
+
+    def sleeve(z, sc):
+        hx, hy = dagger_handle_axes(K.Z_WRAP_TOP)
+        th = np.linspace(0, 2 * math.pi, 36, endpoint=False)
+        jag = 1 + 0.12 * (nz(np.cos(th) * 3 + 2, np.sin(th) * 3 + z * 300) - 0.5) * 2
+        return K.superellipse(36, (hx + 0.0022) * sc, (hy + 0.0022) * sc, 1.8) * jag[:, None]
+
+    K.loft_z(mb, [(GUARD_Z[0] + 0.012, GUARD_Z[0] + 0.012, 1.0), (GUARD_Z[0] - 0.002, GUARD_Z[0] - 0.002, 1.04),
+                  (GUARD_Z[0] - 0.010, GUARD_Z[0] - 0.010, 0.97)], sleeve, cap_top='flat', cap_bottom='flat')
     return mb.to_object("Hilt_Guard", col)
+
+
+def obsidian_painter(name):
+    """Black glassy stone with a glowing violet crack network (Voronoi cell edges)."""
+    k = K.NodeKit(bpy.data.materials.new(name))
+    ao, edge, hl = k.painter_basics(ao_dist=0.004)
+    vor = k.node("ShaderNodeTexVoronoi", feature='DISTANCE_TO_EDGE')
+    vor.inputs["Scale"].default_value = 1 / 0.024
+    vor.inputs["Randomness"].default_value = 1.0
+    k.nt.links.new(k.geo.outputs["Position"], vor.inputs["Vector"])
+    nz = k.noise(120.0, 4.0)
+    crack = k.sub(1.0, k.sstep(0.0, 0.022, vor.outputs["Distance"]))
+    crack = k.mul(crack, k.sstep(0.5, 0.68, nz))                              # a few long cracks, not a grid
+    v = k.add(k.add(k.mul(hl, 0.5), k.mul(ao, 0.5)), k.mul(k.sub(nz, 0.5), 0.1))
+    col = k.ramp(v, [(0.0, "#030106"), (0.5, "#120a1e"), (0.85, "#33204f"), (1.0, "#6e52a0")])
+    col = k.mix(col, K.lin("#c9a8ff"), k.mul(edge, 0.5))
+    col = k.mix(col, K.lin("#b06bff"), crack)
+    emi = k.mix(k.gray(0.0), K.lin("#9a40ff"), crack)
+    k.finish(col, emi, (1.0, 0.28, 0.0), k.mul(crack, -0.00008))
+    K.PAINTER_SOCKETS[k.mat.name] = k.sockets
+    return k.mat
 
 
 def build_scaled_grip(col):
@@ -490,8 +533,7 @@ def build_hilt(col):
     }
     scales = scale_painter("P_DragonScale")
     metal = K.painter("iron", "P_VoidMetal")
-    inlay = K.painter("enamel", "P_VoidInlay", "#2a0c4a", "#7a35d0", "#c79bff", "#efe2ff", "#9a40ff", 0.55)
-    mats = {"guard": [metal, inlay], "pommel": metal, "grip": scales}
+    mats = {"guard": obsidian_painter("P_Obsidian"), "pommel": metal, "grip": scales}
     for key, obj in parts.items():
         for m in (mats[key] if isinstance(mats[key], list) else [mats[key]]):
             obj.data.materials.append(m)

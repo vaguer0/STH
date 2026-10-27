@@ -31,15 +31,15 @@ Kamish's Wrath'ın yapısı, mevcut mor hançerin renkleriyle.
   üçgenlenir; kesit düz plaka, yalnızca kenarda bileme.
 - **Doku:** ortada mürekkep çizgisiyle çevrili koyu oluk bandı, kenarlara doğru mordan lilaya
   geçiş, açık bileme şeridi; omurga boyunca parlayan bir damar ve kenarlara uzanan kolları.
-- **Kabza:** referanslardaki gibi sapı kavrayan, üç boyutlu bir pençe yaka (yassı plaka değil):
-  namlunun dibinden sapın üstüne inen köşeli, dövme bir kovan; üstte genişleyen bir dudak ve
-  ortasında parlayan mor bir halka kakması. Yakadan iki yana çıkıp sapa paralel aşağı inen ve
-  uçta sapa doğru kıvrılan iki bıçak kol (keskin kenarlı mercek kesit; keskin ağız tarafındaki
-  daha büyük) ve ön/arka çaprazlardan sapı sarıp aşağı inen dört pençe. Yüzeyler boğumsuz,
-  pürüzsüz incelen ve keskin sırtlı. Sap ejderha kuyruğu gibi pullu halkalar, sivri topuz.
+- **Kabza:** verilen referanstaki gibi ayrı bir çapraz parça değil; namlunun dibinden sapın
+  başına akan koyu obsidyen bir kütle. Namludan kalın, iki katmanlı (ikinci katman kabarık)
+  ve namlunun dibini sarar; kenarları farklı boyutlarda, geniş tabanlı sivri parçalara
+  bölünür (üstte yukarı-dışa, altta aşağı-dışa, sapın üzerine), üstte namlu boyunca incelen
+  parçalarla biter. İçinden seyrek, uzun, parlayan mor çatlaklar geçer; sapın başını kenarı
+  pürüzlü kısa bir kılıf sarar. Sap ejderha kuyruğu gibi pullu halkalar, sivri topuz.
 - **Gölge alevi:** keskin ağızdan (ve sırttan daha seyrek) yukarı kıvrılan üç tonlu el
   çizimi alevler ve yükselip sönen kıvılcımlar. 6 çizim üçerli değişir
-  (0,75 sn döngü); damar ve halka kakması yavaş nabızla parlar.
+  (0,75 sn döngü); damar ve obsidyen çatlakları yavaş nabızla parlar.
 
 ## Motor notları
 

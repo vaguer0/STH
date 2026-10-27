@@ -25,20 +25,22 @@ setini (`../mystic_katana/build_mystic_katana.py`) kullanır; her şey
 
 Kamish's Wrath'ın yapısı, mevcut mor hançerin renkleriyle.
 
-- **Namlu:** hafif S kıvrımlı koyu bir çekirdek; keskin ağız tarafı düzensiz aralıklı,
-  farklı boyutlarda, uca doğru eğik büyük alev dişlerine bölünür, sırt tarafı sakin ve
-  seyrek küçük dişli; kıvrık sivri uç. Kontur prosedürel olarak üretilir (kendini kesmeyene
-  kadar tohum denenir), kısıtlı Delaunay ile üçgenlenir; kesit düz plaka, yalnızca kenarda
-  dar bileme.
+- **Namlu:** hafif S kıvrımlı koyu bir çekirdek; kenarları düzensiz, grotesk dişlere
+  bölünür. Her diş farklı bir kalıptan gelir (sivri diş, geriye kıvrılan kanca, çatal,
+  kırık/yontuk diş, testere kümesi, uzun ince diken), boyu, eğimi (bazıları geriye bakar) ve
+  dip derinliği rastgeledir; kontura ayrıca el titremesi gibi hafif bir dalgalanma eklenir.
+  Keskin ağız tarafı büyük dişli, sırt seyrek ve küçük dişli. Kontur kendini kesmeyene kadar
+  tohum denenir, kısıtlı Delaunay ile üçgenlenir; kesit düz plaka, yalnızca kenarda bileme.
 - **Doku:** mürekkep çizgisiyle çevrili koyu çekirdek, uca doğru mordan lilaya geçen dişler,
   açık bileme şeridi; omurga boyunca parlayan bir damar ve bazı dişlere uzanan kolları.
-- **Kabza:** pullu, kalkan biçimli bir ejderha kafası ve iki yüzünde parlayan badem göz;
-  kafadan namlunun dişlerini sürdüren kalın, katmanlı alev dilleri (her yanda üçü yukarı,
-  ikisi sapa doğru; keskin ağız tarafında daha büyük). Sap ejderha kuyruğu gibi üst üste
-  binen pullu halkalardan; topuzda aşağı yalayan alev dilleri.
+- **Kabza:** namlu dibini saran topaklı, organik pullu bir düğüm; düğümden her yöne (yassı
+  yüzlere doğru olanlar dahil) çıkan kalın, boğumlu, kıvrık boynuzlar: keskin ağız tarafında
+  namlu boyunca yükselen büyük bir boynuz, sapa doğru kıvrılanlar, yanlara fırlayanlar.
+  Boynuzlar kökte koyu, halka halka boğumlu, uca doğru parlayan lilaya döner. Sap ejderha
+  kuyruğu gibi pullu halkalar; topuzda küçük boğumlu dikenler.
 - **Gölge alevi:** diş uçlarından (hepsinden değil) yukarı kıvrılan üç tonlu el çizimi
   alevler, uçta küçük bir alev, yükselip sönen kıvılcımlar. 6 çizim üçerli değişir
-  (0,75 sn döngü); damar ve göz yavaş nabızla parlar.
+  (0,75 sn döngü); damar ve boynuz uçları yavaş nabızla parlar.
 
 ## Motor notları
 

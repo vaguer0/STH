@@ -33,9 +33,9 @@ Kamish's Wrath'ın yapısı, mevcut mor hançerin renkleriyle.
   geçiş, açık bileme şeridi; omurga boyunca parlayan bir damar ve kenarlara uzanan kolları.
 - **Kabza:** verilen referanstaki gibi ayrı bir çapraz parça değil; namlunun dibinden sapın
   başına akan koyu obsidyen bir kütle. Namludan kalın, iki katmanlı (ikinci katman kabarık)
-  ve namlunun dibini sarar; kenarları farklı boyutlarda, geniş tabanlı sivri parçalara
-  bölünür (üstte yukarı-dışa, altta aşağı-dışa, sapın üzerine), üstte namlu boyunca incelen
-  parçalarla biter. İçinden seyrek, uzun, parlayan mor çatlaklar geçer; sapın başını kenarı
+  ve namlunun kökünü örter; en geniş yeri namlunun dibi, aşağıya sapın üzerine doğru
+  daralır. Namlunun üstüne çıkmaz. Kenarları farklı boyutlarda, geniş tabanlı sivri parçalara
+  bölünür (yana ve aşağı, sapın üzerine doğru). İçinden seyrek, uzun, parlayan mor çatlaklar geçer; sapın başını kenarı
   pürüzlü kısa bir kılıf sarar. Sap ejderha kuyruğu gibi pullu halkalar, sivri topuz.
 - **Gölge alevi:** keskin ağızdan (ve sırttan daha seyrek) yukarı kıvrılan üç tonlu el
   çizimi alevler ve yükselip sönen kıvılcımlar. 6 çizim üçerli değişir

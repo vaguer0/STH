@@ -6,7 +6,7 @@ The purple dagger: a broad, gently S-curved blade whose edges are hand-forged ra
 than machined -- a slow wave plus a few chips and nicks -- with a dark fuller band
 and a glowing vein down the spine.  The guard is a dark obsidian mass that flows
 from the blade root onto the grip: thick, layered, its edges shattered into uneven
-shards -- up and out along the blade, down and out over the grip -- with a glowing
+shards -- out and down over the grip, never climbing the blade -- with a glowing
 violet crack network through it, and a shard-edged sleeve over the top of the grip.  The grip is
 segmented like a tail of scales, and hand-drawn shadow flames burn off the edge.
 
@@ -367,26 +367,27 @@ AX_X, AX_Y, AX_Z = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0,
 # along), thicker than the blade so it encases the blade root, plus a sleeve round
 # the top of the grip.
 
-GUARD_Z = (-0.044, 0.072)          # bottom over the grip, top up along the blade
+GUARD_Z = (-0.046, 0.010)          # bottom over the grip, top just covering the blade root
 
 
 def guard_halfwidth(z):
-    t = (np.asarray(z, float) - GUARD_Z[0]) / (GUARD_Z[1] - GUARD_Z[0])
-    return 0.010 + 0.014 * np.sin(np.pi * np.clip(t / 0.82, 0, 1)) ** 0.8 * (1 - 0.25 * t) + 0.003 * t
+    """Widest at the blade root, narrowing down onto the grip."""
+    t = np.clip((np.asarray(z, float) - GUARD_Z[0]) / (GUARD_Z[1] - GUARD_Z[0]), 0, 1)
+    return 0.011 + 0.017 * t ** 0.8
 
 
 def guard_side(side, rng):
     """One edge, bottom to top: jittered base line broken by shards of varied size and direction."""
     pts, z = [], GUARD_Z[0] + 0.004
     while z < GUARD_Z[1] - 0.006:
-        span = rng.uniform(0.011, 0.024)
+        span = rng.uniform(0.007, 0.013)
         z1 = min(z + span, GUARD_Z[1] - 0.004)
         w0 = float(guard_halfwidth(z)) + rng.uniform(-0.0025, 0.0005)
         pts.append((side * w0, z, 1))
         t = (0.5 * (z + z1) - GUARD_Z[0]) / (GUARD_Z[1] - GUARD_Z[0])
-        if rng.random() < 0.55:
-            ang = math.radians(K.lerp(-62, 58, t) + rng.uniform(-18, 18))      # down-out low, up-out high
-            ln = rng.uniform(0.016, 0.034) * (1.4 if rng.random() < 0.3 else 1.0)
+        if rng.random() < 0.8:
+            ang = math.radians(K.lerp(-65, 20, t) + rng.uniform(-15, 12))      # out and down, never up the blade
+            ln = rng.uniform(0.010, 0.024) * (1.4 if rng.random() < 0.25 else 1.0)
             zm = 0.5 * (z + z1) + rng.uniform(-0.2, 0.2) * (z1 - z)
             wm = float(guard_halfwidth(zm))
             tip = (side * (wm + ln * math.cos(ang)), zm + ln * math.sin(ang))
@@ -403,8 +404,8 @@ def guard_outline(rng):
         left = guard_side(-1.0, rng)
         zt, zb = GUARD_Z[1], GUARD_Z[0]
         wt = float(guard_halfwidth(zt))
-        top = [(wt * k, zt + (rng.uniform(0.012, 0.03) if i % 2 == 0 else rng.uniform(-0.004, 0.002)), 1)
-               for i, k in enumerate(np.linspace(0.85, -0.85, 7))]                  # shards up along the blade
+        top = [(wt * k, zt + rng.uniform(-0.0015, 0.0025), 1)
+               for k in np.linspace(0.9, -0.9, 7)]                                   # roughly broken top edge
         wb = float(guard_halfwidth(zb))
         bottom = [(wb * k, zb - (rng.uniform(0.006, 0.016) if i % 2 else rng.uniform(0.0, 0.002)), 1)
                   for i, k in enumerate(np.linspace(-0.8, 0.8, 5))]                 # a couple of points over the grip
@@ -430,7 +431,7 @@ def build_guard(col):
     P = guard_outline(rng)
     plate(mb, P, 0.0056)
     c = P.mean(axis=0)
-    inner = c + (P - c) * np.array([0.62, 0.8])                                # raised second layer
+    inner = c + (P - c) * np.array([0.62, 0.78]) + np.array([0.0, -0.002])     # raised second layer
     plate(mb, inner, 0.0072, bevel=0.45)
     # sleeve over the top of the grip, its lower rim broken into points
     nz = K.Noise2(9)

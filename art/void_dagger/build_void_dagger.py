@@ -4,10 +4,9 @@ Void Dagger -- SeekThenHide
 
 The purple dagger: a broad, gently S-curved blade whose edges are hand-forged rather
 than machined -- a slow wave plus a few chips and nicks -- with a dark fuller band
-and a glowing vein down the spine.  The guard is a thick forged crescent whose smooth
-arch seats under the blade while its arms hang down over the grip; their inner edge
-breaks into uneven fangs, hooks and forks, the ends curl in as horn tips toward the grip, and a glowing enamel line runs along it over a
-heavy ink underlay; a plain faceted block sits in the middle.  The grip is
+and a glowing vein down the spine.  The guard is a claw collar that clutches the top
+of the grip: a faceted forged sleeve with a glowing inlay ring, two bladed quillons that
+step out and sweep down along the grip, and four talons wrapping down round it.  The grip is
 segmented like a tail of scales, and hand-drawn shadow flames burn off the edge.
 
 Reuses the toolkit in ../mystic_katana/build_mystic_katana.py.
@@ -363,123 +362,65 @@ def paint_dagger_blade(P, res=(1024, 2048)):
 
 AX_X, AX_Y, AX_Z = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
 
-# Fanged crescent crossguard drawn in the blade plane (y across, z along).
-GUARD_HALF = 0.0046
-BLOCK = [(0.0, 0.009, 1), (0.011, 0.006, 0), (0.0135, -0.006, 1), (0.009, -0.020, 0), (0.0, -0.025, 1),
-         (-0.009, -0.020, 0), (-0.0135, -0.006, 1), (-0.011, 0.006, 0)]
-BLOCK_HALF = 0.0088
-FANGS = {   # (u, v, sharp) in tooth space: u outward along the crescent, v up off it
-    "fang":   [(0.30, 0.45, 0), (0.62, 0.86, 0), (0.92, 1.00, 1), (0.86, 0.42, 0)],
-    "hook":   [(0.25, 0.50, 0), (0.55, 0.95, 0), (0.90, 1.05, 0), (1.02, 0.80, 1), (0.84, 0.62, 0), (0.80, 0.35, 0)],
-    "fork":   [(0.18, 0.55, 0), (0.28, 1.00, 1), (0.42, 0.55, 1), (0.62, 0.80, 0), (0.74, 1.18, 1), (0.82, 0.40, 0)],
-    "broken": [(0.12, 0.55, 1), (0.33, 0.62, 1), (0.42, 0.44, 1), (0.66, 0.74, 1), (0.84, 0.30, 0)],
-}
+# Claw collar: a 3D sleeve clutching the top of the grip, with bladed quillons and
+# talons that sweep DOWN along the grip (never up toward the blade).
+
+COLLAR_TOP, COLLAR_BOT = 0.0045, -0.034
 
 
-def crescent_curves(Lh):
-    top = lambda y: 0.003 + 0.016 * (np.abs(y) / Lh) ** 1.6
-    bot = lambda y: -0.017 + 0.024 * (np.abs(y) / Lh) ** 1.8
-    return top, bot
+def lens_profile(width, thick):
+    """Bladed cross-section: sharp edges at +/- width (B axis), thin along N."""
+    return np.array([(0.0, width), (0.55 * thick, 0.55 * width), (thick, 0.0), (0.55 * thick, -0.55 * width),
+                     (0.0, -width), (-0.55 * thick, -0.55 * width), (-thick, 0.0), (-0.55 * thick, 0.55 * width)])
 
 
-def crescent_half(side, Lh, rng):
-    """Upper edge of one half, from the centre out to the horn tip."""
-    top, _ = crescent_curves(Lh)
-    pts = [(side * yy, float(top(yy)), 0) for yy in np.linspace(0.0, 0.013, 4)[1:]]
-    y = 0.013
-    names = list(FANGS)
-    while y < 0.84 * Lh:
-        span = rng.uniform(0.008, 0.015)
-        y1 = min(y + span, 0.86 * Lh)
-        h = 0.008 + 0.022 * (y / Lh) * rng.uniform(0.6, 1.35)
-        lean = rng.uniform(0.6, 1.6)
-        shape = FANGS[str(rng.choice(names, p=[0.4, 0.25, 0.25, 0.1]))]
-        pts.append((side * y, float(top(y)) - rng.uniform(0.0, 0.0015), 1))
-        for u, v, sh in shape:          # local frame on the curve: t outward along it, n its upward normal
-            u = u + rng.normal(0, 0.04)
-            v = v * rng.uniform(0.85, 1.15)
-            yb = y + u * (y1 - y)
-            dz = (top(yb + 1e-4) - top(yb - 1e-4)) / 2e-4
-            t = np.array([1.0, dz]) / math.hypot(1.0, dz)
-            n = np.array([-t[1], t[0]])
-            q = np.array([yb, top(yb)]) + n * v * h + t * 0.6 * lean * v * h
-            pts.append((side * float(q[0]), float(q[1]), sh))
-        y = y1
-    pts.append((side * y, float(top(y)), 1))
-    pts.append((side * (Lh - 0.010), float(top(Lh)) + 0.032, 1))          # horn tip, curling in toward the grip
-    return pts
+def claw(mb, ctrl, width, thick, ref, mat=0, n=36):
+    """Sweep a tapering, sharp-edged blade/talon along a smooth curve (no knobs)."""
+    path = K.resample_polyline(K.catmull_rom([np.array(c, float) for c in ctrl], 14), n)
+    T, N, Bv = K.rotation_minimizing_frames(path, np.asarray(ref, float))
+    s = np.linspace(0, 1, n)
+    taper = (1 - s) ** 0.8 * (0.85 + 0.15 * np.sin(np.pi * np.clip(s / 0.35, 0, 1)))
+    profs = [lens_profile(width * t + 0.0002, thick * t + 0.00015) for t in taper]
+    mb.cur_mat = mat
+    K.sweep(mb, path, (N, Bv), profs, cap_start='flat', cap_end=0.003, sharp_cols=(0, 4))
+    mb.cur_mat = 0
 
 
-def guard_outline(rng):
-    for _ in range(60):
-        right = crescent_half(1.0, 0.050, rng)
-        left = crescent_half(-1.0, 0.057, rng)                            # cutting-edge side is longer
-        _, bot_r = crescent_curves(0.050)
-        _, bot_l = crescent_curves(0.057)
-        bottom = [(float(y), float(bot_l(y) if y < 0 else bot_r(y)), 0) for y in np.linspace(-0.054, 0.047, 24)]
-        raw = bottom + right[::-1] + left
-        P = chaikin([(y, z) for y, z, _ in raw], [s_ for _, _, s_ in raw], iters=3)
-        P = K.resample_polyline(np.vstack([P, P[:1]]), 420)[:-1]
-        if not self_intersects(P):
-            break
-    area = np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
-    return P if area > 0 else P[::-1]
-
-
-def inlay_band():
-    """Glowing line following the crescent between its smooth curves."""
-    top, bot = crescent_curves(0.053)
-    ys = np.linspace(-0.042, 0.040, 40)
-    mid = 0.5 * (top(ys) + bot(ys)) - 0.001
-    w = 0.0016 * np.sin(np.pi * (ys - ys[0]) / (ys[-1] - ys[0])) ** 0.5 + 0.0003
-    return np.vstack([np.column_stack([ys, mid - w]), np.column_stack([ys, mid + w])[::-1]])
-
-
-def guard_shape(pts, sy=1.0, scale=1.0):
-    P = chaikin([(y * sy * scale, z * scale) for y, z, _ in pts], [s for _, _, s in pts], iters=3)
-    area = np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
-    return P if area > 0 else P[::-1]
-
-
-def grow(o, d):
-    t = np.roll(o, -1, 0) - np.roll(o, 1, 0)
-    n = np.column_stack([t[:, 1], -t[:, 0]])
-    n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
-    o2 = o + n * d
-    for _ in range(2):
-        o2 = 0.5 * o2 + 0.25 * (np.roll(o2, 1, 0) + np.roll(o2, -1, 0))
-    return o2
-
-
-def inset(o, k):
-    c = o.mean(axis=0)
-    return c + (o - c) * k
-
-
-def plaque(mb, outline, half, mat, bevel=0.4, rings=3):
-    sub = K.MeshBuilder()
-    K.extrude_shape(sub, outline, 2 * half, bevel=bevel, bevel_rings=rings)
-    sub.face_mat = [mat] * len(sub.faces)
-    if mat == 2:                       # flat ink: almost no atlas space
-        sub.uv_phys = [[(u * 0.06, v * 0.06) for u, v in f] for f in sub.uv_phys]
-    K.place_local(sub, np.zeros(3), AX_Y, AX_Z, AX_X)     # local x->Y, y->Z, thickness->X
-    mb.merge(sub)
+def collar_outline(z, grow_):
+    """Faceted (octagon-ish) section: wide across the blade at the top, grip-sized below."""
+    t = np.clip((COLLAR_TOP - z) / (COLLAR_TOP - COLLAR_BOT), 0, 1)
+    hx_g, hy_g = dagger_handle_axes(K.Z_WRAP_TOP)
+    hx = K.lerp(0.0080, hx_g + 0.0016, t ** 0.7) + grow_
+    hy = K.lerp(0.0225, hy_g + 0.0016, t ** 0.8) + grow_
+    return K.superellipse(32, hx, hy, 1.45, phase=math.pi / 8)
 
 
 def build_guard(col):
-    """Fanged crescent: metal plate, raised glowing line, ink underlay, plain centre block."""
     mb = K.MeshBuilder()
-    rng = np.random.default_rng(77)
-    # drawn opening upward, then flipped so the smooth arch seats under the blade and
-    # the fanged arms and horns hang down over the grip, as on the reference daggers
-    flip = lambda P: np.column_stack([P[:, 0], -P[:, 1] - 0.013])[::-1]
-    cres = flip(guard_outline(rng))
-    plaque(mb, grow(cres, 0.0009), GUARD_HALF * 0.86, 2, bevel=0.0, rings=0)
-    plaque(mb, cres, GUARD_HALF, 0, bevel=0.38)
-    plaque(mb, flip(inlay_band()), GUARD_HALF + 0.0008, 1, bevel=0.5, rings=2)
-    block = guard_shape(BLOCK)
-    plaque(mb, grow(block, 0.0009), BLOCK_HALF * 0.88, 2, bevel=0.0, rings=0)
-    plaque(mb, block, BLOCK_HALF, 0, bevel=0.3, rings=2)
+    z0, z1 = COLLAR_TOP, COLLAR_BOT
+    rings = [(z0, z0, 0.0004), (z0 - 0.0008, z0 - 0.0008, 0.0022), (z0 - 0.0040, z0 - 0.0040, 0.0024),
+             (z0 - 0.0060, z0 - 0.0060, 0.0008), (z0 - 0.012, z0 - 0.012, 0.0), (z0 - 0.022, z0 - 0.022, 0.0),
+             (z1 + 0.003, z1 + 0.003, 0.0006), (z1, z1, 0.0)]
+    K.loft_z(mb, rings, collar_outline, cap_top='flat', cap_bottom='flat', sharp_rings=(1, 2, 3))
+    # glowing inlay ring, standing proud of the sleeve
+    zi = z0 - 0.015
+    ring = K.MeshBuilder()
+    K.loft_z(ring, [(zi + 0.0016, zi + 0.0016, 0.0002), (zi + 0.0010, zi, 0.0009), (zi - 0.0010, zi, 0.0009),
+                    (zi - 0.0016, zi - 0.0016, 0.0002)], collar_outline, cap_top=None, cap_bottom=None)
+    ring.face_mat = [1] * len(ring.faces)
+    mb.merge(ring)
+    # bladed quillons: out from the collar, then down along the grip, tips curling in
+    for side, sc in ((1.0, 0.9), (-1.0, 1.1)):
+        y = lambda v: side * v * sc
+        claw(mb, [(0.0, y(0.016), -0.002), (0.0, y(0.033), -0.008), (0.0, y(0.040), -0.024),
+                  (0.0, y(0.034), -0.048), (0.0, y(0.021), -0.066)], 0.0105 * sc, 0.0036, (1.0, 0.0, 0.0))
+    # talons wrapping down round the grip on the front/back diagonals
+    for k, az in enumerate((0.55, 2.6, -0.55, -2.6)):
+        c, s_ = math.cos(az), math.sin(az)
+        L = 0.040 if k % 2 == 0 else 0.032
+        pts = [(r * c, r * s_ * 1.3, z) for r, z in ((0.010, -0.010), (0.016, -0.018), (0.016, -0.018 - 0.4 * L),
+                                                     (0.012, -0.018 - L))]
+        claw(mb, pts, 0.0056, 0.0026, (c, s_ * 1.3, 0.0))
     return mb.to_object("Hilt_Guard", col)
 
 
@@ -545,15 +486,12 @@ def build_hilt(col):
     parts = {
         "guard": build_guard(col),
         "grip": build_scaled_grip(col),
-        "fuchi": K.build_fuchi(col),
         "pommel": build_pommel(col),
     }
     scales = scale_painter("P_DragonScale")
     metal = K.painter("iron", "P_VoidMetal")
     inlay = K.painter("enamel", "P_VoidInlay", "#2a0c4a", "#7a35d0", "#c79bff", "#efe2ff", "#9a40ff", 0.55)
-    ink = K.painter("enamel", "P_GuardInk", "#05020a", PAL["ink"], "#1d1028", "#1d1028")
-    mats = {"guard": [metal, inlay, ink], "pommel": metal, "grip": scales,
-            "fuchi": K.painter("iron", "P_Fuchi", wave_v=0.0036)}
+    mats = {"guard": [metal, inlay], "pommel": metal, "grip": scales}
     for key, obj in parts.items():
         for m in (mats[key] if isinstance(mats[key], list) else [mats[key]]):
             obj.data.materials.append(m)
@@ -646,7 +584,7 @@ def main():
     hilt_mat = K.assign_final_hilt_material(parts, hpaths)
 
     ink = K.ink_material()
-    outline = K.build_outline([blade, parts["guard"], parts["pommel"], parts["fuchi"], parts["grip"]], col, ink,
+    outline = K.build_outline([blade, parts["guard"], parts["pommel"], parts["grip"]], col, ink,
                               base=0.00035)
     outline.name = "Dagger_InkOutline"
 

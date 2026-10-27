@@ -18,7 +18,7 @@ düz gölgeli (flat shaded) stil. Her şey `build_treasure_cove.py` ile Blender 
 | `renders/treasure_map.png` | Parşömen tarzı yerleşim haritası (numaralı hazine noktaları, patikalar) |
 | `renders/treasure_props_map.png` | Aynı harita, 200 eşyanın yerleriyle |
 | `renders/props_catalog.png` | Bütün eşya çeşitleri yan yana, isimleriyle |
-| `renders/cove_*.png` | Önizlemeler: genel görünüm, tapınak, tepeden |
+| `renders/cove_*.png` | Önizlemeler: genel görünüm, tapınak, doğu ve batı yakası, tepeden |
 
 ## Ada
 
@@ -37,6 +37,19 @@ tepedeki tapınakta birleşir.
   banklar, fıçılar, sandıklar ve tapınağı gösteren bir tabela.
 - **Adacık (kuzeydoğu açığı):** iki palmiyeli küçük bir kum adası. Ana adadan diz boyu
   (-0,45 m) bir kum seti üzerinden yürünerek gidilir.
+- **Deniz feneri (doğu kıyısı):** kırmızı-beyaz çizgili taş kule. Dışındaki spiral merdivenden
+  korkuluklu balkona çıkılır; tepede parlayan ışık odası var.
+- **Balıkçı kulübesi (güneydoğu kumsalı):** kazıklar üzerinde, sazdan çatılı tahta kulübe;
+  verandası, merdiveni, pencereleri, yanında ağ kurutma iskelesi ve ters çevrilmiş bir sandal.
+- **Yıkık taş ev (güneydoğu çayırı):** bir köşesi çökmüş taş duvarlar, kapı ve pencere
+  boşlukları, içeri devrilmiş çatı kirişleri ve moloz.
+- **Kuyu (iskele patikası):** taş bilezik, çatılı makara ve asılı kova.
+- **Mezarlık (doğu tepesi):** kapılı çitle çevrili; mezar taşları, tahta haçlar, açık bir
+  mezar, toprak yığını, kürek ve kurumuş bir ağaç.
+- **Gözcü kulesi (güneybatı):** 4 m yüksekliğinde ahşap kule; merdiveni, korkuluklu
+  platformu, sazdan çatısı ve bayrağı var.
+- **Kaçakçı barakası (batı kumsalı):** önü açık tahta baraka, içinde fıçı ve kasa yığınları.
+- Yeni yapıların hepsine patika gider.
 - Saklanmak için iki düzine kadar palmiye, ~25 çalı ve ~25 kaya; kuzey kumsalında arkasına saklanılabilecek
   büyük kayalar.
 
@@ -55,6 +68,12 @@ her turda birini (ya da birkaçını) açık bırakıp gerisini gizleyebilir.
 | 6 | Güneydoğu kumsalı | Kırmızı **X** işaretinin üstünde, yarı gömülü; yanında kürek |
 | 7 | Tapınağın arkası | Devrik sütunların arasında |
 | 8 | Kuzey kumsalı | Büyük kayaların arasında |
+| 9 | Deniz feneri balkonu | Spiral merdivenle çıkılır |
+| 10 | Balıkçı kulübesi | Kulübenin içinde, arka köşede |
+| 11 | Yıkık ev | Duvarların içinde |
+| 12 | Mezarlık | Açık mezarın yanında |
+| 13 | Gözcü kulesi | Platformun üstünde |
+| 14 | Kaçakçı barakası | Fıçıların önünde |
 
 `PlayerSpawn_01..06` iskelenin kumsal ucunda, iki sıra hâlinde, yüzleri adaya dönük.
 
@@ -68,15 +87,22 @@ ve her bölgeye oraya yakışan eşyalar düşer:
 
 | Bölge | Adet | Eşyalar |
 | --- | --- | --- |
-| Kumsal | 44 | deniz kabuğu, deniz yıldızı, şişede mektup, hindistan cevizi, yengeç, dalgaya vurmuş kütük, kova, halat, küçük sandık, korsan bayrağı |
-| Palmiye altları | 22 | hindistan cevizi (tek / yığın), çuval, kova |
-| Tapınak | 30 | amfora, taş küp, kil çömlek, altın başlı put, kafatası, mücevher kümesi, mumlar, kitap, parşömen, çan, miğfer, kılıç, kese |
-| Korsan kampı | 20 | fıçı, sandık kasa, çuval, fener, kova, rom şişesi, kazan, halat, kese, parşömen, kitap, küçük sandık, kürek, maşrapa |
-| Batık gemi çevresi | 20 | gülle yığını, çapa, dümen, top, fıçı, kasa, rom şişesi, şişe, miğfer, kılıç, halat, çan, fener |
-| Kaya kemeri | 12 | kafatası, fener, mücevher, mantarlar, mumlar, çömlek, kılıç, kese |
+| Kumsal | 36 | deniz kabuğu, deniz yıldızı, şişede mektup, hindistan cevizi, yengeç, dalgaya vurmuş kütük, kova, halat, küçük sandık, korsan bayrağı |
+| Palmiye altları | 19 | hindistan cevizi (tek / yığın), çuval, kova |
+| Tapınak | 27 | amfora, taş küp, kil çömlek, altın başlı put, kafatası, mücevher kümesi, mumlar, kitap, parşömen, çan, miğfer, kılıç, kese |
+| Korsan kampı | 17 | fıçı, sandık kasa, çuval, fener, kova, rom şişesi, kazan, halat, kese, parşömen, kitap, küçük sandık, kürek, maşrapa |
+| Batık gemi çevresi | 18 | gülle yığını, çapa, dümen, top, fıçı, kasa, rom şişesi, şişe, miğfer, kılıç, halat, çan, fener |
+| Kaya kemeri | 10 | kafatası, fener, mücevher, mantarlar, mumlar, çömlek, kılıç, kese |
 | İskele | 6 | kasa, fıçı, halat, kova, fener, çuval |
 | Adacık | 5 | hindistan cevizi, kabuk, şişe, deniz yıldızı |
-| İç kesim | 41 | mantarlar, kütük, çuval, çömlek, kürek, kılıç, miğfer, fener, kafatası, mücevher, küçük sandık, bayrak, amfora… |
+| Deniz feneri | 7 | fener, halat, kova, kasa, fıçı, şişe, kitap, maşrapa |
+| Balıkçı kulübesi | 8 | kova, halat, çuval, fıçı, kasa, hindistan cevizi, şişe, fener, maşrapa |
+| Yıkık ev | 8 | çömlek, taş küp, kitap, mumlar, kafatası, kese, kazan, parşömen, küçük sandık |
+| Mezarlık | 6 | kafatası, mumlar, kürek, fener, kılıç, miğfer, kese, mantarlar |
+| Gözcü kulesi | 4 | fıçı, kasa, fener, çuval, gülle |
+| Kuyu | 2 | kova, kese |
+| Kaçakçı barakası | 5 | fıçı, kasa, rom şişesi, çuval, halat, küçük sandık |
+| İç kesim | 22 | mantarlar, kütük, çuval, çömlek, kürek, kılıç, miğfer, fener, kafatası, mücevher, küçük sandık, bayrak, amfora… |
 
 Eşyalar yapıların, ağaçların, kayaların, patikaların ve spawn noktalarının içine girmeyecek
 şekilde yerleştirilir; tapınaktakiler platform katlarının üstüne oturur. Aynı çeşitteki

@@ -182,6 +182,16 @@ DECK_Z = 0.95
 WRECK_DIR = _dir(COVE_TH)
 WRECK_POS = shore_point(COVE_TH, inland=0.6)
 
+# more structures (built in build_lighthouse() and friends)
+LIGHTHOUSE = shore_point(math.radians(18), inland=3.8)
+HUT = shore_point(math.radians(-28), inland=1.4)
+RUIN = np.array([9.0, -8.2])
+WELL = np.array([12.3, -4.1])
+GRAVEYARD = np.array([14.4, 5.4])
+TOWER = np.array([-11.5, -12.0])
+SHED = np.array([-23.4, 3.6])
+STRUCTURES = [(LIGHTHOUSE, 3.4), (HUT, 4.6), (RUIN, 4.3), (WELL, 1.6), (GRAVEYARD, 3.8), (TOWER, 2.4), (SHED, 2.6)]
+
 PATHS = [
     [DOCK_BASE - DOCK_DIR * 0.5, DOCK_BASE - DOCK_DIR * 6 + [0, 1.5], np.array([8.0, -0.5]),
      np.array([3.0, -0.5]), TEMPLE + [0, -5.8]],
@@ -189,6 +199,11 @@ PATHS = [
     [CAMP + [3.0, 0.5], np.array([-10.0, -2.5]), np.array([-4.0, -1.6]), TEMPLE + [-0.8, -5.8]],
     [TEMPLE + [-5.2, 1.5], np.array([-10.0, 9.0]), ARCH + [1.2, -2.6]],
     [TEMPLE + [5.2, 2.0], np.array([11.0, 10.5]), shore_point(ISLET_TH, inland=1.5)],
+    [DOCK_BASE - DOCK_DIR * 3.5 + [-0.6, 2.2], np.array([21.0, 3.0]), LIGHTHOUSE + [-1.8, -2.6]],
+    [np.array([12.0, -1.0]), WELL + [-0.3, -1.4], RUIN + [1.4, 2.6]],
+    [RUIN + [4.4, -0.2], np.array([14.2, -9.2]), HUT + [-2.6, 1.6]],
+    [np.array([12.3, 9.6]), GRAVEYARD + [-0.9, 2.6]],
+    [np.array([-3.4, -9.6]), np.array([-7.5, -11.2]), TOWER + [1.6, 1.2]],
 ]
 
 
@@ -210,6 +225,12 @@ TREASURE_SPAWNS = [
     ("South-east beach, under the X", shore_point(math.radians(-48), inland=3.2)),
     ("Behind the temple, fallen pillars", TEMPLE + [3.6, 5.6]),
     ("North beach boulders", shore_point(math.radians(102), inland=3.4)),
+    ("Lighthouse gallery", None),        # filled in by build_lighthouse() and the builders below
+    ("Fisherman's hut", None),
+    ("Ruined house", None),
+    ("Graveyard, by the open grave", None),
+    ("Watchtower platform", None),
+    ("Smuggler's shed", None),
 ]
 TREASURE_Z = {}  # index -> z when the chest stands on a prop instead of the ground
 
@@ -420,6 +441,12 @@ def make_materials():
     flat_mat("M_GemRed", "#e2304d", rough=0.1, emit="#e2304d", emit_strength=1.5)
     flat_mat("M_LanternGlow", "#ffd27a", emit="#ffb340", emit_strength=4.0)
     flat_mat("M_CatalogFloor", "#eadcbd", rough=1.0)
+    flat_mat("M_Thatch", "#c9a24f", rough=1.0)
+    flat_mat("M_LighthouseWhite", "#f1ede2", rough=0.8)
+    flat_mat("M_LighthouseRed", "#c23b2e", rough=0.8)
+    flat_mat("M_DeadWood", "#6d655c", rough=1.0)
+    flat_mat("M_WellWater", "#1e3e4a", rough=0.05)
+    flat_mat("M_Dirt", "#8a6a44", rough=1.0)
     flat_mat("M_Flame", "#ff7a1f", emit="#ff7a1f", emit_strength=8.0)
     flat_mat("M_FlameCore", "#ffe08a", emit="#ffe08a", emit_strength=12.0)
     for m in MATS.values():
@@ -938,7 +965,7 @@ def landmark_clear(p, extra=0.0):
     dt = max(abs(p[0] - TEMPLE[0]), abs(p[1] - TEMPLE[1]))
     if dt < 7.2 + extra:
         return False
-    for c, r in ((ARCH, 4.5), (CAMP, 3.6), (WRECK_POS, 6.5), (DOCK_BASE, 3.5)):
+    for c, r in ((ARCH, 4.5), (CAMP, 3.6), (WRECK_POS, 6.5), (DOCK_BASE, 3.5), *STRUCTURES):
         if np.hypot(*(p - c)) < r + extra:
             return False
     for _, s in TREASURE_SPAWNS:
@@ -1303,20 +1330,34 @@ ZONE_ITEMS = {
     "arch": ["skull", "lantern", "gems", "mushrooms", "candles", "clay_pot", "sword", "coin_pouch"],
     "dock": ["crate", "barrel", "rope_coil", "bucket", "lantern", "sack"],
     "islet": ["coconut", "shell", "bottle", "starfish"],
+    "lighthouse": ["lantern", "rope_coil", "bucket", "crate", "barrel", "bottle", "book", "tankard"],
+    "hut": ["bucket", "rope_coil", "sack", "barrel", "crate", "coconut", "bottle", "lantern", "tankard"],
+    "ruin": ["clay_pot", "urn", "book", "candles", "skull", "coin_pouch", "cooking_pot", "scroll", "small_chest"],
+    "graveyard": ["skull", "candles", "shovel", "lantern", "sword", "helmet", "coin_pouch", "mushrooms"],
+    "tower": ["barrel", "crate", "lantern", "sack", "cannonballs"],
+    "well": ["bucket", "coin_pouch"],
+    "shed": ["barrel", "crate", "rum_bottle", "sack", "rope_coil", "small_chest"],
     "inland": ["mushrooms", "stump", "sack", "clay_pot", "shovel", "sword", "helmet", "coconut", "lantern",
                "skull", "gems", "small_chest", "tankard", "flag", "amphora"],
 }
 # (zone, count, centre, radius, height range)
 ZONE_PLAN = [
-    ("beach", 44, None, None, (-0.15, 0.85)),
-    ("palms", 22, None, None, (0.1, 3.5)),
-    ("temple", 30, TEMPLE, 8.5, (0.0, 20.0)),
-    ("camp", 20, CAMP, 6.0, (0.3, 6.0)),
-    ("wreck", 20, None, 8.5, (-0.1, 4.0)),
-    ("arch", 12, ARCH, 6.0, (0.5, 12.0)),
+    ("beach", 36, None, None, (-0.15, 0.85)),
+    ("palms", 19, None, None, (0.1, 3.5)),
+    ("temple", 27, TEMPLE, 8.5, (0.0, 20.0)),
+    ("camp", 17, CAMP, 6.0, (0.3, 6.0)),
+    ("wreck", 18, None, 8.5, (-0.1, 4.0)),
+    ("arch", 10, ARCH, 6.0, (0.5, 12.0)),
     ("dock", 6, None, None, None),
     ("islet", 5, ISLET, 3.4, (0.0, 3.0)),
-    ("inland", 41, np.zeros(2), 26.0, (0.9, 20.0)),
+    ("lighthouse", 7, LIGHTHOUSE, 5.5, (0.2, 6.0)),
+    ("hut", 8, HUT, 5.0, (-0.1, 4.0)),
+    ("ruin", 8, RUIN, 4.5, (0.3, 8.0)),
+    ("graveyard", 6, GRAVEYARD, 3.4, (0.3, 8.0)),
+    ("tower", 4, TOWER, 4.0, (0.3, 8.0)),
+    ("well", 2, WELL, 2.4, (0.3, 8.0)),
+    ("shed", 5, SHED, 4.0, (0.0, 4.0)),
+    ("inland", 22, np.zeros(2), 26.0, (0.9, 20.0)),
 ]
 SOLIDS = []  # (xy, radius) footprints props must keep clear of
 TEMPLE_TIERS = ((4.5, 0.45), (3.6, 1.05), (2.8, 1.6))  # (half size, top z above TEMPLE_Z)
@@ -1481,6 +1522,379 @@ def render_prop_catalog(rig, meshes, path, samples):
         d.text((x - tw / 2, y), k, font=f, fill=(60, 40, 20))
     im.save(path)
     print("[catalog]", path)
+
+
+# ---------------------------------------------------------------------------
+# more structures: lighthouse, fisherman's hut, ruined house, well, graveyard,
+# watchtower and the smugglers' shed
+# ---------------------------------------------------------------------------
+# These are built in world coordinates (object origin at 0) so every post, stilt
+# and wall course can be set on the ground under it.
+
+class Site:
+    """A local frame on the ground: +y is `front`, +x is to its right."""
+
+    def __init__(self, c, front):
+        self.c = np.asarray(c, float)
+        f = np.asarray(front, float)
+        self.f = f / np.linalg.norm(f)
+        self.x = np.array([self.f[1], -self.f[0]])
+        self.yaw = math.atan2(self.x[1], self.x[0])
+
+    def w(self, lx, ly):
+        return self.c + lx * self.x + ly * self.f
+
+    def w3(self, lx, ly, z):
+        p = self.w(lx, ly)
+        return np.array([p[0], p[1], z])
+
+    def g(self, lx, ly):
+        return gz(self.w(lx, ly))
+
+
+def plank_wall(g, site, a, b, z0, height, mat="M_Wood", door=None, window=None, plank=0.3):
+    """Vertical planks from local a to b; door / window are (s0, s1) ranges along the wall."""
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    L = np.linalg.norm(b - a)
+    d = (b - a) / L
+    wd = d[0] * site.x + d[1] * site.f
+    wyaw = math.atan2(wd[1], wd[0])
+    n = max(int(round(L / plank)), 1)
+    for i in range(n):
+        s = (i + 0.5) * L / n
+        p = a + d * s
+        if door and door[0] <= s <= door[1]:
+            continue
+        spans = [(0, height)]
+        if window and window[0] <= s <= window[1]:
+            spans = [(0, height * 0.45), (height * 0.78, height)]
+        for h0, h1 in spans:
+            box(g, site.w3(p[0], p[1], z0 + (h0 + h1) / 2), (L / n - 0.02, 0.08, h1 - h0),
+                "M_Wood" if (i % 3) else "M_WoodLight", rot=(0, 0, wyaw))
+            SOLIDS.append((site.w(p[0], p[1]), 0.2))
+
+
+def pyramid_roof(g, site, half, z_eave, z_apex, mat="M_Thatch", cy=0.0):
+    corners = [site.w3(sx * half, cy + sy * half, z_eave) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    apex = site.w3(0, cy, z_apex)
+    v = np.array(corners + [apex])
+    g.add(v, [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], mat)
+    # a second, slightly lower skin so the thatch reads thick from below
+    g.add(v - [0, 0, 0.12], [[1, 0, 4], [2, 1, 4], [3, 2, 4], [0, 3, 4]], mat)
+
+
+def ladder(g, bottom, top, width=0.6, mat="M_WoodDark"):
+    bottom, top = np.asarray(bottom, float), np.asarray(top, float)
+    a = top - bottom
+    side = np.cross(a, [0, 0, 1.0])
+    side = side / np.linalg.norm(side) * width / 2
+    for s in (-1, 1):
+        tube(g, bottom + s * side, top + s * side + a / np.linalg.norm(a) * 0.3, 0.035, mat=mat, n=5)
+    n = int(np.linalg.norm(a) / 0.32)
+    for k in range(1, n + 1):
+        p = bottom + a * k / (n + 1)
+        tube(g, p - side, p + side, 0.025, mat=mat, n=5)
+
+
+
+
+def build_lighthouse(col, lights):
+    g = Geo()
+    c = LIGHTHOUSE
+    z0 = gz(c)
+    a_in = math.atan2(-c[1], -c[0])
+    H0, H1 = z0 + 0.4, z0 + 7.4
+
+    def r_at(z):
+        return 1.45 - 0.45 * (z - H0) / (H1 - H0)
+
+    def at(r, a, z):
+        return np.array([c[0] + r * math.cos(a), c[1] + r * math.sin(a), z])
+
+    tube(g, (c[0], c[1], z0 - 1.5), (c[0], c[1], H0), 2.0, 1.9, "M_StoneDark", n=12)
+    bands = 6
+    for k in range(bands):
+        za, zb = H0 + (H1 - H0) * k / bands, H0 + (H1 - H0) * (k + 1) / bands
+        tube(g, (c[0], c[1], za), (c[0], c[1], zb), r_at(za), r_at(zb),
+             "M_LighthouseWhite" if k % 2 == 0 else "M_LighthouseRed", n=12)
+    box(g, at(r_at(H0 + 1) - 0.02, a_in, H0 + 0.95), (0.9, 0.22, 1.9), "M_WoodDark", rot=(0, 0, a_in + math.pi / 2))
+    for zz, aa in ((H0 + 3.0, a_in + 2.2), (H0 + 5.0, a_in - 1.3), (H0 + 4.0, a_in + math.pi)):
+        box(g, at(r_at(zz) - 0.03, aa, zz), (0.35, 0.22, 0.6), "M_Dark", rot=(0, 0, aa + math.pi / 2))
+    # gallery, railing, lamp room, roof
+    tube(g, (c[0], c[1], H1 - 0.18), (c[0], c[1], H1), 1.9, mat="M_StoneDark", n=14)
+    tube(g, (c[0], c[1], H1), (c[0], c[1], H1 + 0.25), 0.85, mat="M_StoneDark", n=8)
+    tube(g, (c[0], c[1], H1 + 0.25), (c[0], c[1], H1 + 1.35), 0.72, mat="M_LanternGlow", n=8)
+    for k in range(8):
+        a = 2 * np.pi * k / 8 + np.pi / 8
+        tube(g, at(0.74, a, H1 + 0.25), at(0.74, a, H1 + 1.35), 0.035, mat="M_Iron", n=4)
+    tube(g, (c[0], c[1], H1 + 1.35), (c[0], c[1], H1 + 1.5), 0.98, mat="M_LighthouseRed", n=10)
+    tube(g, (c[0], c[1], H1 + 1.5), (c[0], c[1], H1 + 2.4), 0.98, 0.0, "M_LighthouseRed", n=10)
+    ball(g, (c[0], c[1], H1 + 2.5), 0.12, "M_Iron")
+    lights.append(np.array([c[0], c[1], H1 + 0.8]))
+    # spiral stair around the outside, arriving at the gallery edge
+    N = 26
+    rise = (H1 - H0) / N
+    a0 = a_in + 0.75
+    da = 0.42
+    for k in range(N):
+        zt = H0 + (k + 1) * rise
+        a = a0 + k * da
+        box(g, at(2.35, a, zt - 0.06), (0.9, 0.55, 0.12), "M_Wood" if k % 2 else "M_WoodLight", rot=(0, 0, a))
+        beam(g, at(r_at(zt) - 0.05, a, zt - 0.2), at(1.95, a, zt - 0.12), 0.08, 0.08, "M_Iron")
+    a_top = a0 + (N - 1) * da
+    for k in range(18):
+        a = 2 * np.pi * k / 18
+        if abs(wrap(a - a_top)) < 0.4:
+            continue
+        tube(g, at(1.82, a, H1), at(1.82, a, H1 + 0.95), 0.03, mat="M_Iron", n=4)
+        b = 2 * np.pi * (k + 1) / 18
+        if abs(wrap(b - a_top)) >= 0.4:
+            beam(g, at(1.82, a, H1 + 0.92), at(1.82, b, H1 + 0.92), 0.05, 0.05, "M_Iron")
+    for k in range(N - 1):  # outer stair rail
+        a, b = a0 + k * da, a0 + (k + 1) * da
+        beam(g, at(2.78, a, H0 + (k + 1) * rise + 0.9), at(2.78, b, H0 + (k + 2) * rise + 0.9), 0.05, 0.05,
+             "M_Iron")
+        tube(g, at(2.78, a, H0 + (k + 1) * rise), at(2.78, a, H0 + (k + 1) * rise + 0.9), 0.025, mat="M_Iron", n=4)
+    i = [k for k, (n, _) in enumerate(TREASURE_SPAWNS) if n == "Lighthouse gallery"][0]
+    p = at(1.3, a_top + math.pi, H1)
+    TREASURE_SPAWNS[i] = ("Lighthouse gallery", p[:2])
+    TREASURE_Z[i] = H1
+    SOLIDS.append((c, 2.9))
+    return emit("Lighthouse", g, col)
+
+
+def build_fisher_hut(col):
+    g = Geo()
+    s = Site(HUT, -HUT)
+    pz = max(s.g(x, y) for x in (-1.6, 1.6) for y in (-1.6, 2.6)) + 0.95
+    box(g, s.w3(0, 0.5, pz - 0.05), (3.4, 4.3, 0.1), "M_WoodLight", rot=(0, 0, s.yaw))
+    for lx in (-1.55, 1.55):
+        for ly in (-1.55, 0.5, 2.55):
+            tube(g, s.w3(lx, ly, s.g(lx, ly) - 0.4), s.w3(lx, ly, pz - 0.1), 0.1, mat="M_WoodDark", n=6)
+            SOLIDS.append((s.w(lx, ly), 0.25))
+    plank_wall(g, s, (-1.6, -1.6), (1.6, -1.6), pz, 2.0, window=(1.0, 2.2))
+    plank_wall(g, s, (1.6, -1.6), (1.6, 1.6), pz, 2.0, window=(1.2, 2.0))
+    plank_wall(g, s, (1.6, 1.6), (-1.6, 1.6), pz, 2.0, door=(1.15, 2.05))
+    plank_wall(g, s, (-1.6, 1.6), (-1.6, -1.6), pz, 2.0, window=(1.2, 2.0))
+    pyramid_roof(g, s, 2.15, pz + 1.95, pz + 3.3)
+    for lx in (-1.55, 1.55):
+        tube(g, s.w3(lx, 2.55, pz), s.w3(lx, 2.55, pz + 1.0), 0.06, mat="M_WoodDark", n=5)
+        beam(g, s.w3(lx, 1.6, pz + 0.95), s.w3(lx, 2.55, pz + 0.95), 0.07, 0.07, "M_WoodDark")
+    ladder(g, s.w3(0, 3.7, s.g(0, 3.7) - 0.05), s.w3(0, 2.62, pz + 0.05))
+    SOLIDS.append((s.w(0, 3.6), 0.5))
+    # fishing net on a drying rack, and a boat turned over on the sand
+    for ly in (-0.7, 1.7):
+        tube(g, s.w3(2.9, ly, s.g(2.9, ly) - 0.3), s.w3(2.9, ly, s.g(2.9, ly) + 1.9), 0.06, mat="M_WoodDark", n=5)
+        SOLIDS.append((s.w(2.9, ly), 0.3))
+    zr = s.g(2.9, 0.5)
+    beam(g, s.w3(2.9, -0.8, zr + 1.8), s.w3(2.9, 1.8, zr + 1.8), 0.08, 0.08, "M_WoodDark")
+    for k in range(9):
+        ly = -0.6 + 2.2 * k / 8
+        beam(g, s.w3(2.9, ly, zr + 1.78), s.w3(2.92, ly + 0.05, zr + 0.45), 0.02, 0.02, "M_Rope")
+    for k in range(5):
+        z = zr + 0.55 + 0.28 * k
+        beam(g, s.w3(2.91, -0.6, z), s.w3(2.91, 1.6, z), 0.02, 0.02, "M_Rope")
+    boat, _ = hull_geo(3.0, 1.15, 0.5, 9, 7, mat="M_WoodLight")
+    p = s.w(-3.2, 0.6)
+    g.merge(boat, loc=(p[0], p[1], gz(p) + 0.42), rot=(math.pi, 0, s.yaw + math.pi / 2 + 0.15))
+    SOLIDS.extend([(s.w(-3.2, -0.6), 0.8), (s.w(-3.2, 0.6), 0.8), (s.w(-3.2, 1.8), 0.8)])
+    i = [k for k, (n, _) in enumerate(TREASURE_SPAWNS) if n == "Fisherman's hut"][0]
+    TREASURE_SPAWNS[i] = ("Fisherman's hut", s.w(-0.8, -0.9))
+    TREASURE_Z[i] = pz
+    return emit("Fisherman_Hut", g, col)
+
+
+def build_ruined_house(col):
+    g = Geo()
+    s = Site(RUIN, WELL - RUIN)
+    zc = gz(RUIN)
+    base = zc - 0.8
+    ch, bl, th = 0.42, 0.85, 0.45
+    corner = np.array([3.0, -2.25])
+    rng = np.random.default_rng(31)
+
+    def height(lx, ly):
+        d = math.hypot(lx - corner[0], ly - corner[1])
+        return 0.5 + 2.2 * float(ss(0.6, 4.8, d)) + 0.25 * float(fbm(lx * 0.9, ly * 0.9, 2, seed=8))
+
+    walls = [((-3.0, -2.25), (3.0, -2.25), None, None),        # back
+             ((-3.0, 2.25), (3.0, 2.25), (-0.55, 0.55), None),  # front, with the doorway
+             ((-3.0, -1.8), (-3.0, 1.8), None, (-0.5, 0.5)),    # left, with a window
+             ((3.0, -1.8), (3.0, 1.8), None, None)]             # right
+    for a, b, door, window in walls:
+        a, b = np.array(a), np.array(b)
+        L = np.linalg.norm(b - a)
+        d = (b - a) / L
+        wd = d[0] * s.x + d[1] * s.f
+        wyaw = math.atan2(wd[1], wd[0])
+        for k in range(int(3.0 / ch)):
+            z_bot = base + k * ch
+            off = 0.5 * bl if k % 2 else 0.0
+            t = -off
+            while t < L - 0.05:
+                t0, t1 = max(t, 0), min(t + bl, L)
+                t += bl
+                m = a + d * (t0 + t1) / 2
+                along = (m[0] if abs(d[0]) > 0.5 else m[1])
+                above = z_bot + ch / 2 - zc
+                if above > height(*m):
+                    continue
+                if door and door[0] - 0.2 < along < door[1] + 0.2 and 0 < above + ch / 2 and above < 2.0:
+                    continue
+                if window and window[0] - 0.2 < along < window[1] + 0.2 and 0.9 < above < 1.8:
+                    continue
+                box(g, s.w3(m[0], m[1], z_bot + ch / 2), (t1 - t0 - 0.04, th, ch - 0.03),
+                    "M_Stone" if (k + int(t / bl)) % 3 else "M_StoneDark", rot=(0, 0, wyaw))
+        for t in np.arange(0.3, L, 0.7):
+            p = a + d * t
+            if not (door and door[0] - 0.1 < (p[0] if abs(d[0]) > 0.5 else p[1]) < door[1] + 0.1):
+                SOLIDS.append((s.w(*p), 0.38))
+    # door lintel, rubble at the collapsed corner, fallen roof beams
+    box(g, s.w3(0, 2.25, zc + 2.05), (1.6, 0.5, 0.16), "M_WoodDark", rot=(0, 0, s.yaw))
+    for k in range(10):
+        p = corner + rng.uniform(-1.6, 1.6, 2) * [1, 0.8] + [-0.6, 0.6]
+        sz = rng.uniform(0.3, 0.55)
+        box(g, s.w3(p[0], p[1], s.g(*p) + sz * 0.25), (sz * 1.6, sz, sz * 0.8), "M_StoneDark",
+            rot=(rng.uniform(-.3, .3), rng.uniform(-.3, .3), s.yaw + rng.uniform(0, 3)))
+        SOLIDS.append((s.w(*p), 0.45))
+    for (ax_, ay_), (bx_, by_) in (((-2.8, -2.0), (0.6, -0.6)), ((-2.8, 1.9), (1.2, 0.2))):
+        beam(g, s.w3(ax_, ay_, zc + 2.3), s.w3(bx_, by_, s.g(bx_, by_) + 0.1), 0.16, 0.16, "M_WoodDark")
+        SOLIDS.append((s.w(bx_, by_), 0.4))
+    i = [k for k, (n, _) in enumerate(TREASURE_SPAWNS) if n == "Ruined house"][0]
+    TREASURE_SPAWNS[i] = ("Ruined house", s.w(-2.0, -1.3))
+    return emit("Ruined_House", g, col)
+
+
+def build_well(col):
+    g = Geo()
+    c = WELL
+    z = gz(c)
+    for k in range(12):
+        a = 2 * np.pi * k / 12
+        box(g, (c[0] + 0.75 * math.cos(a), c[1] + 0.75 * math.sin(a), z + 0.15), (0.3, 0.42, 1.1),
+            "M_Stone" if k % 2 else "M_StoneDark", rot=(0, 0, a))
+    tube(g, (c[0], c[1], z + 0.15), (c[0], c[1], z + 0.2), 0.62, mat="M_WellWater", n=12)
+    for sx in (-1, 1):
+        tube(g, (c[0] + sx * 0.95, c[1], z - 0.3), (c[0] + sx * 0.95, c[1], z + 1.95), 0.07, mat="M_WoodDark", n=6)
+    tube(g, (c[0] - 1.05, c[1], z + 1.55), (c[0] + 1.05, c[1], z + 1.55), 0.06, mat="M_Wood", n=6)
+    tube(g, (c[0] + 1.05, c[1], z + 1.55), (c[0] + 1.05, c[1] - 0.3, z + 1.35), 0.03, mat="M_Iron", n=4)
+    for sy in (-1, 1):
+        beam(g, (c[0], c[1], z + 2.35), (c[0], c[1] + sy * 0.95, z + 1.75), 2.3, 0.06, "M_WoodDark")
+    tube(g, (c[0], c[1], z + 1.5), (c[0], c[1], z + 1.0), 0.012, mat="M_Rope", n=4)
+    g.merge(item_geo("bucket"), loc=(c[0], c[1], z + 0.55), scale=0.85)
+    SOLIDS.append((c, 1.15))
+    return emit("Well", g, col)
+
+
+def build_graveyard(col):
+    g = Geo()
+    s = Site(GRAVEYARD, np.array([12.5, 9.8]) - GRAVEYARD)
+    rng = np.random.default_rng(41)
+    W, D = 2.6, 2.0
+    ring = [(-W, -D), (W, -D), (W, D), (0.6, D), (-0.6, D), (-W, D)]
+    segs = [(ring[0], ring[1]), (ring[1], ring[2]), (ring[2], ring[3]), (ring[4], ring[5]), (ring[5], ring[0])]
+    for a, b in segs:
+        a, b = np.array(a), np.array(b)
+        n = max(int(np.linalg.norm(b - a) / 0.85), 1)
+        pts = [a + (b - a) * k / n for k in range(n + 1)]
+        for k, p in enumerate(pts):
+            gate = abs(p[0]) < 0.7 and p[1] > 0
+            tube(g, s.w3(p[0], p[1], s.g(*p) - 0.3), s.w3(p[0], p[1], s.g(*p) + (1.3 if gate else 0.95)),
+                 0.05 if not gate else 0.08, mat="M_WoodDark", n=5)
+            SOLIDS.append((s.w(*p), 0.2))
+            if k:
+                q = pts[k - 1]
+                for h in (0.4, 0.8):
+                    beam(g, s.w3(q[0], q[1], s.g(*q) + h), s.w3(p[0], p[1], s.g(*p) + h), 0.05, 0.08, "M_Wood")
+    for lx, ly in ((-1.7, -1.1), (-0.5, -1.2), (0.7, -1.1), (1.8, -1.0)):
+        z = s.g(lx, ly)
+        rot = (rng.uniform(-0.15, 0.15), rng.uniform(-0.15, 0.15), s.yaw + rng.uniform(-0.15, 0.15))
+        box(g, s.w3(lx, ly, z + 0.3), (0.55, 0.16, 0.9), "M_StoneDark", rot=rot)
+        box(g, s.w3(lx, ly, z + 0.78), (0.42, 0.14, 0.12), "M_StoneDark", rot=rot)
+        SOLIDS.append((s.w(lx, ly), 0.4))
+    for lx, ly in ((-1.9, 0.9), (2.0, 1.2)):
+        z = s.g(lx, ly)
+        p0, p1 = s.w3(lx, ly, z - 0.2), s.w3(lx, ly, z + 1.1)
+        beam(g, p0, p1 + [0.0, 0.0, 0.0], 0.08, 0.08, "M_WoodLight")
+        beam(g, s.w3(lx - 0.3, ly, z + 0.8), s.w3(lx + 0.3, ly, z + 0.8), 0.07, 0.07, "M_WoodLight")
+        SOLIDS.append((s.w(lx, ly), 0.3))
+    zg = s.g(0.3, 0.6)
+    box(g, s.w3(0.3, 0.6, zg - 0.2), (1.8, 0.8, 0.44), "M_Dark", rot=(0, 0, s.yaw))
+    rock(g, s.w3(0.4, 1.35, zg), (0.95, 0.35, 0.35), "M_Dirt", seed=77, yaw=s.yaw, rough=0.1, sink=0.5)
+    g.merge(item_geo("shovel"), loc=s.w3(1.45, 0.3, zg), rot=(0, 0, s.yaw))
+    SOLIDS.extend([(s.w(-0.3, 0.6), 0.5), (s.w(0.9, 0.6), 0.5), (s.w(0.4, 1.35), 0.6), (s.w(1.45, 0.3), 0.3)])
+    # a dead tree in the corner
+    t = s.w3(-2.0, -0.1, s.g(-2.0, -0.1))
+    pts = [t + [0, 0, -0.2], t + [0.1, 0.05, 1.0], t + [-0.05, 0.12, 1.9], t + [0.2, 0.0, 2.7]]
+    for k in range(3):
+        tube(g, pts[k], pts[k + 1], 0.16 - 0.04 * k, 0.12 - 0.035 * k, "M_DeadWood", n=6)
+    for p0, d, L in ((pts[1], (0.8, 0.3, 0.6), 1.0), (pts[2], (-0.7, -0.2, 0.7), 0.9), (pts[2], (0.3, -0.8, 0.5), 0.8)):
+        d = np.array(d) / np.linalg.norm(d)
+        tube(g, p0, p0 + d * L, 0.07, 0.02, "M_DeadWood", n=5)
+    SOLIDS.append((s.w(-2.0, -0.1), 0.45))
+    i = [k for k, (n, _) in enumerate(TREASURE_SPAWNS) if n == "Graveyard, by the open grave"][0]
+    TREASURE_SPAWNS[i] = ("Graveyard, by the open grave", s.w(-0.9, -0.15))
+    return emit("Graveyard", g, col)
+
+
+def build_watchtower(col):
+    g = Geo()
+    s = Site(TOWER, -TOWER)
+    pz = gz(TOWER) + 4.2
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            b = s.w3(sx * 1.15, sy * 1.15, s.g(sx * 1.15, sy * 1.15) - 0.4)
+            t = s.w3(sx * 0.98, sy * 0.98, pz + 2.25)
+            tube(g, b, t, 0.12, 0.1, "M_WoodDark", n=6)
+            SOLIDS.append((s.w(sx * 1.15, sy * 1.15), 0.3))
+    for (ax_, ay_), (bx_, by_) in (((-1, -1), (1, -1)), ((1, -1), (1, 1)), ((1, 1), (-1, 1)), ((-1, 1), (-1, -1))):
+        za, zb = s.g(ax_ * 1.12, ay_ * 1.12) + 0.5, s.g(bx_ * 1.12, by_ * 1.12) + 0.5
+        beam(g, s.w3(ax_ * 1.12, ay_ * 1.12, za), s.w3(bx_ * 1.0, by_ * 1.0, pz - 0.3), 0.08, 0.1, "M_Wood")
+        beam(g, s.w3(bx_ * 1.12, by_ * 1.12, zb), s.w3(ax_ * 1.0, ay_ * 1.0, pz - 0.3), 0.08, 0.1, "M_Wood")
+    box(g, s.w3(0, 0, pz - 0.06), (2.6, 2.6, 0.12), "M_WoodLight", rot=(0, 0, s.yaw))
+    for (ax_, ay_), (bx_, by_) in (((-1.25, -1.25), (-0.4, -1.25)), ((0.4, -1.25), (1.25, -1.25)),
+                                   ((1.25, -1.25), (1.25, 1.25)), ((1.25, 1.25), (-1.25, 1.25)),
+                                   ((-1.25, 1.25), (-1.25, -1.25))):
+        for h in (0.5, 1.0):
+            beam(g, s.w3(ax_, ay_, pz + h), s.w3(bx_, by_, pz + h), 0.06, 0.08, "M_Wood")
+    for lx in (-0.4, 0.4):
+        tube(g, s.w3(lx, -1.25, pz), s.w3(lx, -1.25, pz + 1.05), 0.05, mat="M_WoodDark", n=5)
+    pyramid_roof(g, s, 1.65, pz + 2.2, pz + 3.25)
+    ladder(g, s.w3(0, -2.15, s.g(0, -2.15) - 0.05), s.w3(0, -1.3, pz + 0.05))
+    SOLIDS.append((s.w(0, -2.1), 0.5))
+    tube(g, s.w3(0, 0, pz + 3.2), s.w3(0, 0, pz + 4.1), 0.03, mat="M_WoodDark", n=4)
+    g.add([s.w3(0, 0, pz + 4.05), s.w3(0.55, 0.05, pz + 3.95), s.w3(0, 0, pz + 3.75)], [[0, 1, 2]], "M_ClothRed")
+    i = [k for k, (n, _) in enumerate(TREASURE_SPAWNS) if n == "Watchtower platform"][0]
+    TREASURE_SPAWNS[i] = ("Watchtower platform", s.w(0.3, 0.35))
+    TREASURE_Z[i] = pz
+    return emit("Watchtower", g, col)
+
+
+def build_shed(col):
+    g = Geo()
+    s = Site(SHED, -SHED)
+    z = max(s.g(x, y) for x in (-1.6, 1.6) for y in (-1.2, 1.2))
+    box(g, s.w3(0, 0, z - 0.1), (3.4, 2.6, 0.2), "M_WoodLight", rot=(0, 0, s.yaw))
+    plank_wall(g, s, (-1.6, -1.2), (1.6, -1.2), z, 2.4)
+    plank_wall(g, s, (-1.6, 1.2), (-1.6, -1.2), z, 2.1)
+    plank_wall(g, s, (1.6, -1.2), (1.6, 1.2), z, 2.1, window=(0.8, 1.6))
+    for lx in (-1.6, 1.6):
+        tube(g, s.w3(lx, 1.35, z - 0.3), s.w3(lx, 1.35, z + 2.05), 0.08, mat="M_WoodDark", n=6)
+        SOLIDS.append((s.w(lx, 1.35), 0.25))
+    for k in range(9):
+        lx = -1.9 + 3.8 * (k + 0.5) / 9
+        beam(g, s.w3(lx, -1.5, z + 2.5), s.w3(lx, 1.7, z + 2.0), 0.4, 0.05, "M_WoodDark" if k % 2 else "M_Wood")
+    for k, (lx, ly) in enumerate(((-1.1, -0.7), (-0.5, -0.75), (-1.15, -0.1))):
+        barrel(g, s.w3(lx, ly, z), seed=k * 0.7)
+        SOLIDS.append((s.w(lx, ly), 0.35))
+    crate(g, s.w3(1.0, -0.65, z), 0.65, s.yaw)
+    crate(g, s.w3(1.0, -0.65, z + 0.65), 0.5, s.yaw + 0.3)
+    crate(g, s.w3(1.05, 0.1, z), 0.5, s.yaw - 0.2)
+    SOLIDS.extend([(s.w(1.0, -0.65), 0.45), (s.w(1.05, 0.1), 0.35)])
+    i = [k for k, (n, _) in enumerate(TREASURE_SPAWNS) if n == "Smuggler's shed"][0]
+    TREASURE_SPAWNS[i] = ("Smuggler's shed", s.w(-0.1, 0.35))
+    TREASURE_Z[i] = z
+    return emit("Smugglers_Shed", g, col)
 
 
 # ---------------------------------------------------------------------------
@@ -1656,6 +2070,39 @@ def draw_parchment_map(path, spawns, players, palms, props=None):
                            ("İskele", (a1[0] - 40, a1[1] + 18)), ("Kaya Kemeri", (ax - 80, ay - 76)),
                            ("Korsan Kampı", (cx - 96, cy + 18)), ("Adacık", (ix - 44, iy - 66))):
         d.text((lx, ly), name, font=label_f, fill=ink)
+    # the smaller structures
+    hx, hy = px(LIGHTHOUSE)
+    d.ellipse([hx - 13, hy - 13, hx + 13, hy + 13], fill=(194, 59, 46), outline=ink, width=3)
+    for k in range(8):
+        a = 2 * np.pi * k / 8
+        d.line([(hx + 17 * math.cos(a), hy + 17 * math.sin(a)), (hx + 27 * math.cos(a), hy + 27 * math.sin(a))],
+               fill=ink, width=3)
+    for c, w_, h_ in ((HUT, 22, 22), (SHED, 22, 16)):
+        x, y = px(c)
+        d.rectangle([x - w_ / 2, y - h_ / 2 + 6, x + w_ / 2, y + h_ / 2 + 6], fill=(176, 136, 86), outline=ink, width=3)
+        d.polygon([(x - w_ / 2 - 5, y - h_ / 2 + 6), (x, y - h_ / 2 - 10), (x + w_ / 2 + 5, y - h_ / 2 + 6)],
+                  fill=(201, 162, 79), outline=ink)
+    x, y = px(RUIN)
+    for seg in (((-28, -20), (28, -20)), ((28, -20), (28, 2)), ((-28, -20), (-28, 20)), ((-28, 20), (-6, 20)),
+                ((6, 20), (14, 20))):
+        d.line([(x + seg[0][0], y + seg[0][1]), (x + seg[1][0], y + seg[1][1])], fill=ink, width=5)
+    x, y = px(WELL)
+    d.ellipse([x - 10, y - 10, x + 10, y + 10], fill=(40, 70, 90), outline=ink, width=3)
+    x, y = px(GRAVEYARD)
+    d.rectangle([x - 30, y - 24, x + 30, y + 24], outline=ink, width=2)
+    for dx, dy in ((-15, -6), (0, 8), (15, -6)):
+        d.line([(x + dx, y + dy - 9), (x + dx, y + dy + 9)], fill=ink, width=3)
+        d.line([(x + dx - 6, y + dy - 3), (x + dx + 6, y + dy - 3)], fill=ink, width=3)
+    x, y = px(TOWER)
+    d.rectangle([x - 14, y - 14, x + 14, y + 14], outline=ink, width=3)
+    d.line([(x - 14, y - 14), (x + 14, y + 14)], fill=ink, width=3)
+    d.line([(x - 14, y + 14), (x + 14, y - 14)], fill=ink, width=3)
+    for name, c, (ox, oy) in (("Deniz Feneri", LIGHTHOUSE, (-178, -36)), ("Balıkçı Kulübesi", HUT, (-70, 40)),
+                              ("Yıkık Ev", RUIN, (-46, 30)), ("Kuyu", WELL, (16, -12)),
+                              ("Mezarlık", GRAVEYARD, (-44, 30)), ("Gözcü Kulesi", TOWER, (-64, 20)),
+                              ("Kaçakçı Barakası", SHED, (-80, 22))):
+        x, y = px(c)
+        d.text((x + ox, y + oy), name, font=small_f, fill=ink)
     # treasure X marks, numbered
     for i, p in enumerate(spawns):
         x, y = px(p)
@@ -1677,7 +2124,7 @@ def draw_parchment_map(path, spawns, players, palms, props=None):
     d.rectangle([lx - 16, ly - 16, lx + 380, ly + 104], fill=(236, 218, 170), outline=ink, width=3)
     for s in (1, -1):
         d.line([(lx, ly + 14 - 10 * s), (lx + 20, ly + 14 + 10 * s)], fill=red, width=5)
-    d.text((lx + 34, ly + 2), "Hazine noktası (1–8)", font=small_f, fill=ink)
+    d.text((lx + 34, ly + 2), f"Hazine noktası (1–{len(spawns)})", font=small_f, fill=ink)
     d.ellipse([lx + 3, ly + 40, lx + 17, ly + 54], fill=(40, 70, 130), outline=ink)
     d.text((lx + 34, ly + 36), "Oyuncu başlangıcı", font=small_f, fill=ink)
     d.line([(lx, ly + 82), (lx + 22, ly + 82)], fill=(139, 60, 36), width=4)
@@ -1753,6 +2200,13 @@ def main():
     build_arch(mark_col)
     build_camp(mark_col, fire)
     build_x_mark(mark_col, TREASURE_SPAWNS[5][1])
+    build_lighthouse(mark_col, fire)
+    build_fisher_hut(mark_col)
+    build_ruined_house(mark_col)
+    build_well(mark_col)
+    build_graveyard(mark_col)
+    build_watchtower(mark_col)
+    build_shed(mark_col)
     palms, _, _ = build_vegetation(veg_col)
     spawns, players = build_spawns(game_col)
     props, item_meshes = build_treasure_props(K.get_collection("TreasureProps", world_col), palms, wreck)
@@ -1764,6 +2218,8 @@ def main():
     top = camera(rig, "Cam_Top", (0, 0, 80), (0, 0, 0), ortho=72)
     top.rotation_euler = (0, 0, 0)
     near = camera(rig, "Cam_Temple", (9, -10, TEMPLE_Z + 5.5), (0, 5, TEMPLE_Z + 1.4), lens=28)
+    east = camera(rig, "Cam_East", (36, -26, 13), (14, -1, 2.5), lens=30)
+    west = camera(rig, "Cam_West", (-34, -30, 13), (-15, -5, 2.0), lens=30)
 
     draw_parchment_map(os.path.join(RENDER_DIR, "treasure_map.png"), [p for _, p in spawns], players, palms)
     draw_parchment_map(os.path.join(RENDER_DIR, "treasure_props_map.png"), [p for _, p in spawns], players, palms,
@@ -1773,6 +2229,8 @@ def main():
         res_w = (960, 540) if FAST else (1920, 1080)
         render(hero, os.path.join(RENDER_DIR, "cove_hero.png"), res_w, s)
         render(near, os.path.join(RENDER_DIR, "cove_temple.png"), res_w, s)
+        render(east, os.path.join(RENDER_DIR, "cove_east.png"), res_w, s)
+        render(west, os.path.join(RENDER_DIR, "cove_west.png"), res_w, s)
         render(top, os.path.join(RENDER_DIR, "cove_top.png"), (800, 800) if FAST else (1600, 1600), s)
         render_prop_catalog(rig, item_meshes, os.path.join(RENDER_DIR, "props_catalog.png"), s)
     scene.camera = hero

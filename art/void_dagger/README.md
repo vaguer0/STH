@@ -31,14 +31,16 @@ Kamish's Wrath'ın yapısı, mevcut mor hançerin renkleriyle.
   üçgenlenir; kesit düz plaka, yalnızca kenarda bileme.
 - **Doku:** ortada mürekkep çizgisiyle çevrili koyu oluk bandı, kenarlara doğru mordan lilaya
   geçiş, açık bileme şeridi; omurga boyunca parlayan bir damar ve kenarlara uzanan kolları.
-- **Kabza:** yassı, dövme metal "yarasa kanadı" çapraz muhafız: iki yana açılan kalın
-  kanatların üst kenarı namluya doğru kıvrılıp pençeyle biter, alt kenarı kanat parmakları
-  gibi dalgalı; ortada elmas gövde. Gövdede ve kanatlarda kabartma, parlayan mor mine
-  kakmalar; her parçanın altında kalın mürekkep kontur katmanı. Keskin ağız tarafındaki kanat
-  biraz daha büyük. Sap ejderha kuyruğu gibi pullu halkalar, sivri topuz.
+- **Kabza:** referanslardaki gibi sapın üzerine inen kalın, dövme metal bir hilal muhafız:
+  pürüzsüz kemeri namlunun dibine oturur, kolları sapın iki yanına sarkar. Kolların iç kenarı
+  aşağı ve dışa eğik, farklı boyutlarda sivri diş, kanca, çatal ve kırık dişlere bölünür
+  (Kamish'in diş dilinden esinli, özgün kontur); uçları sapa doğru içe kıvrılan boynuz
+  uçlarıyla biter. Hilal boyunca parlayan mor bir mine çizgisi, ortada gözsüz sade köşeli
+  bir blok, her parçanın altında
+  kalın mürekkep kontur katmanı. Sap ejderha kuyruğu gibi pullu halkalar, sivri topuz.
 - **Gölge alevi:** keskin ağızdan (ve sırttan daha seyrek) yukarı kıvrılan üç tonlu el
-  çizimi alevler, uçta küçük bir alev, yükselip sönen kıvılcımlar. 6 çizim üçerli değişir
-  (0,75 sn döngü); damar ve kakmalar yavaş nabızla parlar.
+  çizimi alevler ve yükselip sönen kıvılcımlar. 6 çizim üçerli değişir
+  (0,75 sn döngü); damar ve mine çizgisi yavaş nabızla parlar.
 
 ## Motor notları
 

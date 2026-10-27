@@ -4,9 +4,10 @@ Void Dagger -- SeekThenHide
 
 The purple dagger: a broad, gently S-curved blade whose edges are hand-forged rather
 than machined -- a slow wave plus a few chips and nicks -- with a dark fuller band
-and a glowing vein down the spine.  The guard is a flat, forged bat-wing crossguard:
-thick wings that sweep up into claws, scalloped lower edges like wing fingers, a
-diamond boss, raised glowing enamel inlays and a heavy ink underlay.  The grip is
+and a glowing vein down the spine.  The guard is a thick forged crescent whose smooth
+arch seats under the blade while its arms hang down over the grip; their inner edge
+breaks into uneven fangs, hooks and forks, the ends curl in as horn tips toward the grip, and a glowing enamel line runs along it over a
+heavy ink underlay; a plain faceted block sits in the middle.  The grip is
 segmented like a tail of scales, and hand-drawn shadow flames burn off the edge.
 
 Reuses the toolkit in ../mystic_katana/build_mystic_katana.py.
@@ -362,14 +363,76 @@ def paint_dagger_blade(P, res=(1024, 2048)):
 
 AX_X, AX_Y, AX_Z = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
 
-# Bat-wing crossguard drawn in the blade plane (y across, z along); (y, z, sharp).
-WING = [(0.010, 0.000, 0), (0.022, 0.004, 0), (0.036, 0.012, 0), (0.047, 0.024, 0), (0.056, 0.040, 1),
-        (0.054, 0.022, 0), (0.060, 0.004, 1), (0.049, 0.004, 0), (0.052, -0.014, 1), (0.040, -0.009, 0),
-        (0.036, -0.024, 1), (0.026, -0.016, 0), (0.012, -0.016, 0)]
-BOSS = [(0.0, 0.010, 1), (0.014, 0.003, 0), (0.017, -0.009, 0), (0.0, -0.027, 1), (-0.017, -0.009, 0),
-        (-0.014, 0.003, 0)]
-BOSS_HALF = 0.0090
-WING_HALF = 0.0044
+# Fanged crescent crossguard drawn in the blade plane (y across, z along).
+GUARD_HALF = 0.0046
+BLOCK = [(0.0, 0.009, 1), (0.011, 0.006, 0), (0.0135, -0.006, 1), (0.009, -0.020, 0), (0.0, -0.025, 1),
+         (-0.009, -0.020, 0), (-0.0135, -0.006, 1), (-0.011, 0.006, 0)]
+BLOCK_HALF = 0.0088
+FANGS = {   # (u, v, sharp) in tooth space: u outward along the crescent, v up off it
+    "fang":   [(0.30, 0.45, 0), (0.62, 0.86, 0), (0.92, 1.00, 1), (0.86, 0.42, 0)],
+    "hook":   [(0.25, 0.50, 0), (0.55, 0.95, 0), (0.90, 1.05, 0), (1.02, 0.80, 1), (0.84, 0.62, 0), (0.80, 0.35, 0)],
+    "fork":   [(0.18, 0.55, 0), (0.28, 1.00, 1), (0.42, 0.55, 1), (0.62, 0.80, 0), (0.74, 1.18, 1), (0.82, 0.40, 0)],
+    "broken": [(0.12, 0.55, 1), (0.33, 0.62, 1), (0.42, 0.44, 1), (0.66, 0.74, 1), (0.84, 0.30, 0)],
+}
+
+
+def crescent_curves(Lh):
+    top = lambda y: 0.003 + 0.016 * (np.abs(y) / Lh) ** 1.6
+    bot = lambda y: -0.017 + 0.024 * (np.abs(y) / Lh) ** 1.8
+    return top, bot
+
+
+def crescent_half(side, Lh, rng):
+    """Upper edge of one half, from the centre out to the horn tip."""
+    top, _ = crescent_curves(Lh)
+    pts = [(side * yy, float(top(yy)), 0) for yy in np.linspace(0.0, 0.013, 4)[1:]]
+    y = 0.013
+    names = list(FANGS)
+    while y < 0.84 * Lh:
+        span = rng.uniform(0.008, 0.015)
+        y1 = min(y + span, 0.86 * Lh)
+        h = 0.008 + 0.022 * (y / Lh) * rng.uniform(0.6, 1.35)
+        lean = rng.uniform(0.6, 1.6)
+        shape = FANGS[str(rng.choice(names, p=[0.4, 0.25, 0.25, 0.1]))]
+        pts.append((side * y, float(top(y)) - rng.uniform(0.0, 0.0015), 1))
+        for u, v, sh in shape:          # local frame on the curve: t outward along it, n its upward normal
+            u = u + rng.normal(0, 0.04)
+            v = v * rng.uniform(0.85, 1.15)
+            yb = y + u * (y1 - y)
+            dz = (top(yb + 1e-4) - top(yb - 1e-4)) / 2e-4
+            t = np.array([1.0, dz]) / math.hypot(1.0, dz)
+            n = np.array([-t[1], t[0]])
+            q = np.array([yb, top(yb)]) + n * v * h + t * 0.6 * lean * v * h
+            pts.append((side * float(q[0]), float(q[1]), sh))
+        y = y1
+    pts.append((side * y, float(top(y)), 1))
+    pts.append((side * (Lh - 0.010), float(top(Lh)) + 0.032, 1))          # horn tip, curling in toward the grip
+    return pts
+
+
+def guard_outline(rng):
+    for _ in range(60):
+        right = crescent_half(1.0, 0.050, rng)
+        left = crescent_half(-1.0, 0.057, rng)                            # cutting-edge side is longer
+        _, bot_r = crescent_curves(0.050)
+        _, bot_l = crescent_curves(0.057)
+        bottom = [(float(y), float(bot_l(y) if y < 0 else bot_r(y)), 0) for y in np.linspace(-0.054, 0.047, 24)]
+        raw = bottom + right[::-1] + left
+        P = chaikin([(y, z) for y, z, _ in raw], [s_ for _, _, s_ in raw], iters=3)
+        P = K.resample_polyline(np.vstack([P, P[:1]]), 420)[:-1]
+        if not self_intersects(P):
+            break
+    area = np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
+    return P if area > 0 else P[::-1]
+
+
+def inlay_band():
+    """Glowing line following the crescent between its smooth curves."""
+    top, bot = crescent_curves(0.053)
+    ys = np.linspace(-0.042, 0.040, 40)
+    mid = 0.5 * (top(ys) + bot(ys)) - 0.001
+    w = 0.0016 * np.sin(np.pi * (ys - ys[0]) / (ys[-1] - ys[0])) ** 0.5 + 0.0003
+    return np.vstack([np.column_stack([ys, mid - w]), np.column_stack([ys, mid + w])[::-1]])
 
 
 def guard_shape(pts, sy=1.0, scale=1.0):
@@ -404,17 +467,19 @@ def plaque(mb, outline, half, mat, bevel=0.4, rings=3):
 
 
 def build_guard(col):
-    """Forged bat-wing crossguard: metal plates, raised glowing inlays, ink underlay."""
+    """Fanged crescent: metal plate, raised glowing line, ink underlay, plain centre block."""
     mb = K.MeshBuilder()
-    boss = guard_shape(BOSS)
-    plaque(mb, grow(boss, 0.0009), BOSS_HALF * 0.86, 2, bevel=0.0, rings=0)
-    plaque(mb, boss, BOSS_HALF, 0, bevel=0.45)
-    plaque(mb, inset(boss, 0.5) + np.array([0.0, -0.002]), BOSS_HALF + 0.0012, 1, bevel=0.6, rings=2)
-    for sy, sc in ((1.0, 1.0), (-1.0, 1.12)):         # the cutting-edge wing is the bigger one
-        w = guard_shape(WING, sy, sc)
-        plaque(mb, grow(w, 0.0009), WING_HALF * 0.86, 2, bevel=0.0, rings=0)
-        plaque(mb, w, WING_HALF, 0, bevel=0.4)
-        plaque(mb, inset(w, 0.55), WING_HALF + 0.0009, 1, bevel=0.6, rings=2)
+    rng = np.random.default_rng(77)
+    # drawn opening upward, then flipped so the smooth arch seats under the blade and
+    # the fanged arms and horns hang down over the grip, as on the reference daggers
+    flip = lambda P: np.column_stack([P[:, 0], -P[:, 1] - 0.013])[::-1]
+    cres = flip(guard_outline(rng))
+    plaque(mb, grow(cres, 0.0009), GUARD_HALF * 0.86, 2, bevel=0.0, rings=0)
+    plaque(mb, cres, GUARD_HALF, 0, bevel=0.38)
+    plaque(mb, flip(inlay_band()), GUARD_HALF + 0.0008, 1, bevel=0.5, rings=2)
+    block = guard_shape(BLOCK)
+    plaque(mb, grow(block, 0.0009), BLOCK_HALF * 0.88, 2, bevel=0.0, rings=0)
+    plaque(mb, block, BLOCK_HALF, 0, bevel=0.3, rings=2)
     return mb.to_object("Hilt_Guard", col)
 
 
@@ -523,11 +588,6 @@ def build_shadow_fire(col, mats, phase, name):
         size = (0.006 + 0.85 * h) * (1 + 0.22 * K.wave(phase, rng.random(), 1 + j % 2)) * rng.uniform(0.75, 1.2)
         flame(t - d * 0.0015, up, size, size * 0.42, rng.uniform(0.4, 0.9) * side,
               (0.6 + 0.3 * K.wave(phase, rng.random())) * -side, rng.uniform(-0.5, 0.5), 1500 + j)
-    tip = np.array([0.0, float(spine_y(BLADE_L)) + 0.004, BLADE_L + 0.012])
-    for k in range(1):
-        size = 0.015 * (1 + 0.2 * K.wave(phase, 0.3 * k + 0.1))
-        flame(tip, np.array([0.0, 0.25, 1.0]), size, size * 0.4, 0.6, 0.8 * (1 if k else -1),
-              (0.6 if k else -0.4), 1600 + k)
     # embers rising off the blade and burning out
     for j in range(14):
         rise = (phase + j * 0.618) % 1.0
